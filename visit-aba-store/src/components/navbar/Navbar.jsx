@@ -1,11 +1,28 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
-import { Search, ShoppingCart, User, HelpCircle, ChevronDown } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useCart } from '../../context/CartContext';
+import { Search, ShoppingCart, User, HelpCircle } from 'lucide-react';
+import { useCategories } from '../../hooks/useCategories';
+import CategoryMenu from '../navbar/CategoryMenu';
 
 const Navbar = () => {
   const { cartCount } = useCart();
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  
+  // 1. Integration: Fetch Categories from Backend
+  const { categories, loading } = useCategories();
+
+  // 2. Integration: Search Logic
+  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      // Redirects to: /search?q=laptop
+      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
 
   return (
     <nav className="bg-white border-b sticky top-0 z-50">
@@ -16,28 +33,39 @@ const Navbar = () => {
 
         {/* Categories & Search (Center) */}
         <div className="flex-grow flex items-center gap-4 max-w-3xl">
-          <div className="hidden lg:flex items-center gap-1 text-sm font-medium hover:text-blue-600 cursor-pointer shrink-0">
-            Categories <ChevronDown size={16} />
+          
+          {/* Integrated Category Dropdown */}
+          <div className="hidden lg:block z-50">
+            {loading ? (
+              <span className="text-sm text-gray-400">Loading...</span>
+            ) : (
+              <CategoryMenu categories={categories} />
+            )}
           </div>
           
-          <form className="relative flex-grow">
+          {/* Search Form */}
+          <form onSubmit={handleSearch} className="relative flex-grow">
             <input 
               type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search for products..." 
-              className="w-full bg-gray-100 border-none rounded-full py-2.5 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full bg-gray-100 border-none rounded-full py-2.5 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
             />
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <button type="submit" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600">
+               <Search size={18} />
+            </button>
           </form>
         </div>
 
-        {/* Right Actions */}
+        {/* Right Actions (Unchanged mostly) */}
         <div className="flex items-center gap-6">
           <Link to="/support" className="hidden md:flex items-center gap-1 text-sm font-medium hover:text-blue-600">
             <HelpCircle size={20} /> Support
           </Link>
 
           {/* Account Dropdown */}
-          <div className="relative" onMouseEnter={() => setIsAccountOpen(true)} onMouseLeave={() => setIsAccountOpen(false)}>
+          <div className="relative z-50" onMouseEnter={() => setIsAccountOpen(true)} onMouseLeave={() => setIsAccountOpen(false)}>
             <button className="flex items-center gap-2 hover:text-blue-600 py-2">
               <User size={20} /> <span className="text-sm font-medium">Account</span>
             </button>
