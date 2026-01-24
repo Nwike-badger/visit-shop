@@ -1,0 +1,8 @@
+export const products = [
+  { id: 1, name: "Premium Leather Sneakers", price: 120.00, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600", category: "Shoes", description: "High-quality leather sneakers for daily wear." },
+  { id: 2, name: "Smart Watch Pro", price: 250.00, image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600", category: "Electronics", description: "A smart watch that tracks everything." },
+  { id: 3, name: "Designer Backpack", price: 85.00, image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=600", category: "Accessories", description: "Spacious and stylish backpack." },
+  { id: 1, name: "Premium Leather Sneakers", price: 120.00, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600", category: "Shoes", description: "High-quality leather sneakers for daily wear." },
+  { id: 2, name: "Smart Watch Pro", price: 250.00, image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600", category: "Electronics", description: "A smart watch that tracks everything." },
+  { id: 3, name: "Designer Backpack", price: 85.00, image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=600", category: "Accessories", description: "Spacious and stylish backpack." },
+];
