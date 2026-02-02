@@ -1,3 +1,4 @@
+// components/product/ProductCard.jsx
 import { Link } from "react-router-dom";
 
 const getDisplayImage = (product) => {
@@ -9,40 +10,59 @@ const getDisplayImage = (product) => {
 };
 
 const ProductCard = ({ product }) => {
+  const hasDiscount = product.discount > 0;
+
   return (
-    <div className="group border rounded-xl overflow-hidden hover:shadow-lg transition-shadow bg-white flex flex-col h-full">
-      {/* ADDED 'relative' here so the badge stays inside this box */}
-      <Link to={`/product/${product.id}`} className="block h-64 overflow-hidden bg-gray-100 relative">
+    <div className="group border border-gray-100 rounded-lg overflow-hidden bg-white hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-shadow duration-300 flex flex-col h-full relative">
+      
+      {/* IMAGE CONTAINER */}
+      <Link to={`/product/${product.id}`} className="block relative aspect-[4/5] overflow-hidden bg-gray-200">
         <img
           src={getDisplayImage(product)}
           alt={product.name}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-in-out"
         />
         
-        {/* Badge Moved Here. It will overlay the image now. */}
-        {product.discount > 0 && (
-          <div className="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded z-10">
+        {/* Discount Badge */}
+        {hasDiscount && (
+          <div className="absolute top-2 left-0 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 shadow-sm">
             -{product.discount}%
           </div>
         )}
       </Link>
 
-      <div className="p-4 flex flex-col flex-grow">
-        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
+      {/* TEXT CONTENT */}
+      <div className="p-3 flex flex-col flex-grow">
+        
+        {/* Category */}
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 truncate">
           {product.categoryName}
         </p>
 
+        {/* Title: CHANGED 
+            - Removed 'line-clamp-2'
+            - Added 'truncate': Forces single line with ...
+            - Added 'block': Ensures it takes full width
+        */}
         <Link
           to={`/product/${product.id}`}
-          className="font-bold text-lg block mb-2 hover:text-blue-600 line-clamp-2"
+          className="font-medium text-sm text-gray-800 hover:text-blue-600 truncate block mb-1"
+          title={product.name} // Keeps the hover tooltip so users can read the full name
         >
           {product.name}
         </Link>
 
-        <div className="mt-auto pt-2">
-          <p className="text-xl font-black text-gray-900">
+        {/* Price Section */}
+        <div className="mt-auto">
+          <p className="text-base font-bold text-gray-900">
             ₦{product.price.toLocaleString()}
           </p>
+          
+          {hasDiscount && (
+             <p className="text-xs text-gray-400 line-through">
+               ₦{(product.price * (1 + product.discount / 100)).toLocaleString(undefined, {maximumFractionDigits: 0})}
+             </p>
+          )}
         </div>
       </div>
     </div>
