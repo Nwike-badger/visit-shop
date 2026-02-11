@@ -1,68 +1,136 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const CategoryMenu = ({ categories }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // Default to the first category if available, so the panel isn't empty on load
   const [activeCategory, setActiveCategory] = useState(null);
+
+  const handleMouseEnter = () => {
+    setIsOpen(true);
+    // If no category is active yet, set the first one automatically
+    if (!activeCategory && categories.length > 0) {
+      setActiveCategory(categories[0]);
+    }
+  };
 
   return (
     <div 
-      className="relative"
-      onMouseEnter={() => setIsOpen(true)}
-      onMouseLeave={() => {
-        setIsOpen(false);
-        setActiveCategory(null);
-      }}
+      className="relative z-50"
+      onMouseLeave={() => setIsOpen(false)}
     >
-      {/* Trigger Button */}
-      <button className="flex items-center gap-1 text-sm font-medium hover:text-blue-600 cursor-pointer shrink-0 py-4">
-        Categories <ChevronDown size={16} />
-      </button>
+      {/* 1. THE TRIGGER AREA */}
+      <div 
+        onMouseEnter={handleMouseEnter}
+        className="flex items-center gap-1.5 py-4 cursor-pointer group"
+      >
+        <span className="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors">
+          Categories
+        </span>
+        <ChevronDown 
+          size={16} 
+          className={`text-gray-500 group-hover:text-blue-600 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} 
+        />
+        
+        {/* Invisible Bridge: Prevents menu closing when moving mouse from text to dropdown */}
+        <div className="absolute top-full left-0 w-32 h-2 bg-transparent"></div>
+      </div>
 
-      {/* Main Dropdown */}
+      {/* 2. THE MEGA MENU CONTAINER */}
       {isOpen && (
-        <div className="absolute top-full left-0 w-64 bg-white shadow-xl border rounded-lg py-2 z-50">
-          {categories.map((cat) => (
-            <div 
-              key={cat.slug} 
-              className="group relative px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
-              onMouseEnter={() => setActiveCategory(cat)}
-            >
-              <Link to={`/category/${cat.slug}`} className="text-sm text-gray-700 font-medium flex-grow">
-                {cat.name}
-              </Link>
-              {cat.children && cat.children.length > 0 && (
-                <ChevronRight size={14} className="text-gray-400" />
-              )}
+        <div className="absolute top-[calc(100%-5px)] left-0 w-[800px] bg-white shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-gray-100 rounded-lg overflow-hidden flex min-h-[400px]">
+          
+          {/* LEFT COLUMN: Main Categories (Sidebar) */}
+          <div className="w-64 bg-gray-50 border-r border-gray-100 py-3">
+            {categories.map((cat) => (
+              <div 
+                key={cat.slug} 
+                onMouseEnter={() => setActiveCategory(cat)}
+                className={`
+                  flex items-center justify-between px-5 py-3 cursor-pointer transition-all
+                  ${activeCategory?.slug === cat.slug 
+                    ? "bg-white text-blue-600 border-l-4 border-blue-600 shadow-sm" 
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 border-l-4 border-transparent"}
+                `}
+              >
+                <Link to={`/category/${cat.slug}`} className="font-medium text-sm block flex-grow">
+                  {cat.name}
+                </Link>
+                {activeCategory?.slug === cat.slug && (
+                  <ChevronRight size={14} className="text-blue-600" />
+                )}
+              </div>
+            ))}
+          </div>
 
-              {/* Sub-Category Flyout (Level 2 & 3) */}
-              {activeCategory?.slug === cat.slug && cat.children?.length > 0 && (
-                <div className="absolute left-full top-0 ml-1 w-64 bg-white shadow-xl border rounded-lg py-2 min-h-full">
-                  <div className="px-4 pb-2 border-b mb-2">
-                    <span className="text-xs font-bold text-gray-500 uppercase">{cat.name}</span>
-                  </div>
-                  {cat.children.map((subCat) => (
-                    <div key={subCat.slug} className="px-4 py-1.5">
-                      <Link to={`/category/${subCat.slug}`} className="text-sm font-semibold text-gray-800 hover:text-blue-600 block">
-                        {subCat.name}
-                      </Link>
-                      {/* Level 3 Links */}
-                      {subCat.children && (
-                        <div className="ml-2 mt-1 flex flex-col gap-1 border-l-2 border-gray-100 pl-2">
-                          {subCat.children.map(child => (
-                             <Link key={child.slug} to={`/category/${child.slug}`} className="text-xs text-gray-500 hover:text-blue-600">
-                               {child.name}
-                             </Link>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+          {/* RIGHT COLUMN: Subcategories (The "Mega" Part) */}
+          <div className="flex-1 p-8 bg-white">
+            {activeCategory ? (
+              <div className="h-full">
+                {/* Header for the Right Side */}
+                <div className="flex items-center justify-between mb-6 border-b pb-4">
+                  <h3 className="text-xl font-bold text-gray-800">
+                    {activeCategory.name}
+                  </h3>
+                  <Link 
+                    to={`/category/${activeCategory.slug}`} 
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider"
+                  >
+                    See all {activeCategory.name} &rarr;
+                  </Link>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* The Grid Content */}
+                {activeCategory.children && activeCategory.children.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-x-12 gap-y-8">
+                    {activeCategory.children.map((subCat) => (
+                      <div key={subCat.slug} className="break-inside-avoid">
+                        {/* Level 2 Header */}
+                        <Link 
+                          to={`/category/${subCat.slug}`}
+                          className="font-bold text-gray-900 text-sm mb-2 block hover:text-blue-600"
+                        >
+                          {subCat.name}
+                        </Link>
+                        
+                        {/* Level 3 List */}
+                        {subCat.children && (
+                          <ul className="space-y-1.5">
+                            {subCat.children.map((child) => (
+                              <li key={child.slug}>
+                                <Link 
+                                  to={`/category/${child.slug}`}
+                                  className="text-sm text-gray-500 hover:text-blue-500 hover:underline transition-colors block"
+                                >
+                                  {child.name}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                    <p>Browse all products in {activeCategory.name}</p>
+                    <Link 
+                       to={`/category/${activeCategory.slug}`}
+                       className="mt-4 px-6 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-700 transition"
+                    >
+                      Shop Now
+                    </Link>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Fallback if nothing selected (rare)
+              <div className="flex items-center justify-center h-full text-gray-400">
+                Hover over a category
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
