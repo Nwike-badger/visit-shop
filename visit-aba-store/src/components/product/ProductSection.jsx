@@ -1,5 +1,4 @@
-// import useProducts from "../../hooks/useProducts";
-// import ProductGrid from "./ProductGrid";
+
 import SectionHeader from "./SectionHeader";
 
 

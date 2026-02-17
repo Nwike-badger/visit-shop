@@ -2,11 +2,9 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const CategoryMenu = ({ categories }) => {
+const CategoryMenu = ({ categories = [] }) => { // ✅ Default to empty array
   const [isOpen, setIsOpen] = useState(false);
-  // Default to the first category if available, so the panel isn't empty on load
   const [activeCategory, setActiveCategory] = useState(null);
-
   const handleMouseEnter = () => {
     setIsOpen(true);
     // If no category is active yet, set the first one automatically
