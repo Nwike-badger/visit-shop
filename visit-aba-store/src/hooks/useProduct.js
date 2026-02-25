@@ -12,9 +12,18 @@ const useProduct = (id) => {
     const fetchProduct = async () => {
       setLoading(true);
       try {
-        // This fetches ONE product by ID
         const response = await api.get(`/products/${id}`);
-        setProduct(response.data);
+        
+        // ✅ DATA TRANSFORMATION
+        // Backend sends: { product: {...}, variants: [...] }
+        // We flatten it for the UI
+        console.log("RAW API RESPONSE:", response.data);
+        const { product: productData, variants } = response.data;
+        
+        setProduct({
+            ...productData,
+            variants: variants // Attach variants to the main object
+        });
       } catch (err) {
         console.error("Error fetching product details:", err);
         setError(err);

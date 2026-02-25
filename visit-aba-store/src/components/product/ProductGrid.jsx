@@ -1,7 +1,7 @@
-// components/common/ProductGrid.jsx
 import ProductCard from "../product/ProductCard";
 
-const ProductGrid = ({ products, columns = 4, gap = "normal" }) => {
+// Added 'isFlashSale' prop here
+const ProductGrid = ({ products, columns = 4, gap = "normal", isFlashSale = false }) => {
   
   const gridConfig = {
     2: "grid-cols-2", 
@@ -11,7 +11,6 @@ const ProductGrid = ({ products, columns = 4, gap = "normal" }) => {
     6: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6",
   };
 
-  
   const gapConfig = {
     tight: "gap-3",  
     normal: "gap-4 sm:gap-6", 
@@ -24,7 +23,11 @@ const ProductGrid = ({ products, columns = 4, gap = "normal" }) => {
   return (
     <div className={`grid ${activeGrid} ${activeGap}`}>
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
+        <ProductCard 
+            key={product.id} 
+            product={product} 
+            isFlashSale={isFlashSale} // 👈 Pass it down
+        />
       ))}
     </div>
   );

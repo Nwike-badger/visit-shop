@@ -1,23 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useParams } from 'react-router-dom';
-import useProduct from '../../hooks/useProduct'; // Your existing hook
-import ProductGallery from '../../pages/product/ProductGallery';
-import ProductInfo from '../../pages/product/ProductInfo';
-import TrustSidebar from '../../pages/product/TrustSidebar';
+import useProduct from '../../hooks/useProduct'; 
+import ProductGallery from './ProductGallery';
+import ProductInfo from './ProductInfo';
+import TrustSidebar from './TrustSidebar';
 
 const ProductPage = () => {
   const { id } = useParams();
-  
-  // Assuming your hook returns { product, loading, error }
-  // If your hook uses "slug" instead of "id", ensure the param matches.
   const { product, loading, error } = useProduct(id); 
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="animate-pulse flex flex-col items-center">
-        <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <div className="text-gray-400 font-medium">Loading Product...</div>
-      </div>
+      <div className="animate-pulse text-blue-600 font-bold">Loading Product...</div>
     </div>
   );
 
@@ -27,55 +21,41 @@ const ProductPage = () => {
     </div>
   );
 
-  // --- 🧠 DATA TRANSFORMER ---
-  // The backend sends raw data. We format it for the UI here.
+  // --- 🧠 DATA PREPARATION ---
   
-  // 1. Extract Images (Handle both object and string formats)
-  const galleryImages = product.images?.map(img => 
-    typeof img === 'string' ? img : img.url
-  ) || [];
+  // 1. Extract Images
+  // Ensure we handle both Object objects and simple strings if legacy data exists
+  const galleryImages = product.images?.map(img => img.url || img) || [];
 
-  // 2. Extract Colors & Sizes from variantOptions
-  // Backend sends: [{ name: "Color", values: ["Red", "Blue"] }]
-  // We convert to: colors: [{name: "Red", hex: "#..."}, ...], sizes: ["M", "L"]
-  let parsedColors = [];
-  let parsedSizes = [];
+  // 2. Extract Colors & Sizes for UI
+  // Your backend sends: variantOptions: [{name: "Color", values: ["Red"]}, {name: "Size", values: ["XL"]}]
+  let colors = [];
+  let sizes = [];
 
   if (product.variantOptions) {
-    // Find the option named "Color" (case insensitive)
-    const colorOption = product.variantOptions.find(o => o.name.toLowerCase() === 'color');
-    if (colorOption) {
-      parsedColors = colorOption.values.map(val => ({
-        name: val,
-        // Simple helper to guess hex code (or use a library/backend field later)
-        hex: getColorHex(val) 
-      }));
+    const colorOpt = product.variantOptions.find(o => o.name.toLowerCase() === 'color');
+    if (colorOpt) {
+        colors = colorOpt.values.map(val => ({ name: val, hex: getColorHex(val) }));
     }
 
-    // Find the option named "Size"
-    const sizeOption = product.variantOptions.find(o => o.name.toLowerCase() === 'size');
-    if (sizeOption) {
-      parsedSizes = sizeOption.values;
+    const sizeOpt = product.variantOptions.find(o => o.name.toLowerCase() === 'size');
+    if (sizeOpt) {
+        sizes = sizeOpt.values;
     }
   }
 
-  // 3. Calculate Discounted vs Original Price
-  // If backend sends `basePrice` (selling) and `compareAtPrice` (original)
-  const displayPrice = product.basePrice;
-  const originalPrice = product.compareAtPrice || (product.discount > 0 ? (product.basePrice / (1 - product.discount/100)) : null);
-  const discountPercent = product.discount || (originalPrice > displayPrice ? Math.round(((originalPrice - displayPrice) / originalPrice) * 100) : 0);
-
+  // 3. Construct Enhanced Product for Child Components
   const enhancedProduct = {
     ...product,
     images: galleryImages,
-    colors: parsedColors,
-    sizes: parsedSizes,
-    price: displayPrice,
-    originalPrice: originalPrice,
-    discount: discountPercent,
+    colors: colors,
+    sizes: sizes,
+    // Provide defaults for display if null
+    price: product.basePrice || 0,
+    originalPrice: product.compareAtPrice,
     seller: {
        name: product.brandName || "Official Store",
-       rating: product.averageRating || 4.8,
+       rating: 4.8, 
        years: 3,
        successRate: "98%"
     }
@@ -83,25 +63,18 @@ const ProductPage = () => {
 
   return (
     <div className="bg-white min-h-screen pb-20 font-sans">
-      {/* Breadcrumb */}
       <div className="max-w-[1440px] mx-auto px-4 py-4 text-xs text-gray-500 uppercase tracking-wide">
-        Home / {product.categoryName || 'Product'} / <span className="text-gray-900 font-bold">{product.name}</span>
+        Home / {product.categoryName} / <span className="text-gray-900 font-bold">{product.name}</span>
       </div>
 
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          
-          {/* LEFT: Gallery (5 cols) */}
           <div className="lg:col-span-6 xl:col-span-6">
             <ProductGallery images={galleryImages} />
           </div>
-
-          {/* CENTER: Info (4 cols) */}
           <div className="lg:col-span-4 xl:col-span-4">
             <ProductInfo product={enhancedProduct} />
           </div>
-
-          {/* RIGHT: Trust/Delivery (2 cols) - Hidden on smaller screens if needed */}
           <div className="lg:col-span-2 xl:col-span-2 space-y-6">
             <TrustSidebar seller={enhancedProduct.seller} />
           </div>
@@ -111,15 +84,10 @@ const ProductPage = () => {
   );
 };
 
-// Helper for color bubbles
+// Simple hex mapper for the UI bubbles
 const getColorHex = (name) => {
-  const colors = {
-    "black": "#000000", "white": "#ffffff", "red": "#ef4444", 
-    "blue": "#3b82f6", "green": "#22c55e", "yellow": "#eab308", 
-    "purple": "#a855f7", "gray": "#6b7280", "wine": "#722F37", 
-    "titanium": "#878681"
-  };
-  return colors[name.toLowerCase()] || "#cccccc";
+  const map = { "black": "#000", "white": "#fff", "red": "#ef4444", "blue": "#3b82f6", "green": "#22c55e" };
+  return map[name.toLowerCase()] || "#ccc";
 };
 
 export default ProductPage;
