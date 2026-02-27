@@ -7,6 +7,8 @@ import ProductPage from "./pages/product/ProductPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
+import AccountPage from "./pages/account/AccountPage";
+import SearchResults from "./pages/SearchResults";
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
+              <Route path="/account" element={<AccountPage />} />
+              <Route path="/search" element={<SearchResults />} />
               {/* <Route path="/signup" element={<SignupPage />} /> */}
               
             </Routes>
