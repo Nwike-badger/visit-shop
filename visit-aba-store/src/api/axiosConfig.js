@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'react-hot-toast';
 
 const api = axios.create({
   baseURL: 'http://localhost:8080/api', 
@@ -8,16 +9,13 @@ const api = axios.create({
   },
 });
 
+// Request Interceptor (Your existing logic)
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  
-  // 1. Send Token if it exists
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   } 
   
-  // 2. ALWAYS Ensure Guest ID exists and send it
-  // This acts as a fallback if the token is expired/invalid
   let guestId = localStorage.getItem('guest_cart_id');
   if (!guestId) {
     guestId = uuidv4();
@@ -27,5 +25,22 @@ api.interceptors.request.use((config) => {
 
   return config;
 }, (error) => Promise.reject(error));
+
+// 🔥 NEW: Response Interceptor (The 401 Shield)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Prevent spamming toast messages if multiple requests fail at once
+      if (localStorage.getItem('token')) {
+          localStorage.removeItem('token');
+          toast.error("Session expired. Please log in again.");
+          // Send them to login and preserve intent
+          window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;

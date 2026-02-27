@@ -9,43 +9,37 @@ import useProducts from "../hooks/useProducts";
 const Home = () => {
   const { products, loading } = useProducts();
 
-  // --- 🧠 SMART LAYOUT CONFIG ---
-  const LAYOUT_CONFIG = [
-    {
-      id: "section-1",
-      type: "split",
-      left: { 
-        title: "Flash Sales", 
-        products: products.slice(0, 4), 
-        align: "left", 
-        gap: "tight",
-        isFlashSale: true 
+  // 🔥 FIX: useMemo prevents the array and slices from recreating every render
+  const LAYOUT_CONFIG = useMemo(() => {
+    if (!products || products.length === 0) return [];
+    
+    return [
+      {
+        id: "section-1",
+        type: "split",
+        left: { title: "Flash Sales", products: products.slice(0, 4), align: "left", gap: "tight", isFlashSale: true },
+        right: { title: "Trending Now", products: products.slice(4, 8), align: "left", gap: "tight" }
       },
-      right: { 
-        title: "Trending Now", 
-        products: products.slice(4, 8), 
-        align: "left", 
-        gap: "tight" 
-      }
-    },
-    {
-      id: "section-2",
-      type: "full",
-      title: "Explore Your Interests",
-      products: products.length > 8 ? products.slice(8, 20) : products.slice(0, 10), 
-      columns: 5,
-      gap: "normal"
-    },
-    {
-      id: "section-3",
-      type: "full",
-      title: "Clearance Deals",
-      products: products.slice(0, 6).reverse(), 
-      columns: 6,
-      gap: "tight",
-      isFlashSale: true
-    },
-  ];
+      {
+        id: "section-2",
+        type: "full",
+        title: "Explore Your Interests",
+        products: products.length > 8 ? products.slice(8, 20) : products.slice(0, 10), 
+        columns: 5,
+        gap: "normal"
+      },
+      {
+        id: "section-3",
+        type: "full",
+        title: "Clearance Deals",
+        // Using slice instead of modifying the original array to prevent mutations
+        products: products.slice(0, 6).reverse(), 
+        columns: 6,
+        gap: "tight",
+        isFlashSale: true
+      },
+    ];
+  }, [products]);
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-gray-50">

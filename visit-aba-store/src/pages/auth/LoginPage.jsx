@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import api from '../../api/axiosConfig';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext'; // 🔥 Added missing import
+import { toast } from 'react-hot-toast'; // 🔥 Added toast for professional alerts
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -12,6 +14,9 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { refreshCart } = useCart();
+  
+  // 🔥 Extract login from your global AuthContext
+  const { login } = useAuth(); 
 
   // If user was redirected from Checkout, go back there after login
   const from = location.state?.from?.pathname || "/";
@@ -31,9 +36,10 @@ const LoginPage = () => {
         guestId: guestId // 👈 CRITICAL: Tells backend to merge carts
       });
 
-      // 1. Save Token
       const { accessToken } = response.data;
-      localStorage.setItem('token', accessToken);
+      
+      // 1. Update Global Auth State (This replaces manual localStorage.setItem)
+      await login(accessToken);
       
       // 2. Clear Guest ID (Backend has merged it)
       localStorage.removeItem('guest_cart_id');
@@ -41,7 +47,8 @@ const LoginPage = () => {
       // 3. Refresh Cart Context
       refreshCart();
 
-      // 4. Navigate
+      // 4. Success Toast & Navigate
+      toast.success("Welcome back!");
       navigate(from, { replace: true });
 
     } catch (err) {
@@ -56,7 +63,7 @@ const LoginPage = () => {
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
         <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-900">Welcome Back</h2>
-            <p className="text-sm text-gray-500 mt-2">Log in to continue to checkout</p>
+            <p className="text-sm text-gray-500 mt-2">Log in to continue shopping</p>
         </div>
         
         {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-100">{error}</div>}
@@ -92,7 +99,6 @@ const LoginPage = () => {
           </button>
         </form>
 
-        {/* 👇 NEW: Link to Signup */}
         <div className="mt-6 text-center text-sm text-gray-600">
           Don't have an account?{' '}
           <Link 

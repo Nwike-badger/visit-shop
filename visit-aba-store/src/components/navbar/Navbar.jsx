@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import api from '../../api/axiosConfig';
+import { useAuth } from '../../context/AuthContext'; // Global Auth Context
 import { 
   Search, 
   ShoppingCart, 
@@ -20,35 +20,28 @@ import CategoryMenu from '../navbar/CategoryMenu';
 
 const Navbar = () => {
   const { cartCount, cartTotal } = useCart();
-  const { categories, loading } = useCategories();
+  const { categories, loading: categoriesLoading } = useCategories();
+  
+  // 🔥 Only use global Auth State! No more manual localStorage checks here.
+  const { user, isAuthenticated, logout } = useAuth(); 
+  
   const navigate = useNavigate();
   const location = useLocation();
 
-  // State
+  // Component State
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [userData, setUserData] = useState(null);
-  
-  // 🔥 1. SMART AUTH CHECK: Check if user has a token
-  const isLoggedIn = !!localStorage.getItem('token');
 
-  useEffect(() => {
-    if (isLoggedIn) {
-      api.get('/v1/users/me')
-        .then(res => setUserData(res.data))
-        .catch(err => console.error("Failed to load user info", err));
-    }
-  }, [isLoggedIn]);
-
-  // Handle Scroll Effect
+  // Handle Scroll Effect for glassmorphism
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Handle Search Submission
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -56,10 +49,10 @@ const Navbar = () => {
     }
   };
 
-  // 🔥 2. LOGOUT FUNCTION
+  // Safe Logout using Context
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/'; 
+    logout(); // Let AuthContext clear tokens and show toast
+    navigate('/'); // Soft redirect to home
   };
 
   return (
@@ -105,7 +98,7 @@ const Navbar = () => {
           {/* CENTER: Search & Categories */}
           <div className="hidden md:flex flex-1 items-center gap-6 max-w-4xl mx-auto">
             <div className="shrink-0 relative">
-               {loading ? (
+               {categoriesLoading ? (
                  <div className="w-24 h-8 bg-gray-100 animate-pulse rounded"></div>
                ) : (
                  <CategoryMenu categories={categories} />
@@ -152,20 +145,20 @@ const Navbar = () => {
               onMouseLeave={() => setIsAccountOpen(false)}
             >
               <Link 
-                to={isLoggedIn ? "/account" : "/login"} 
-                className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${isLoggedIn ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'}`}
+                to={isAuthenticated ? "/account" : "/login"} 
+                className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${isAuthenticated ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'}`}
               >
-                {/* Dynamic Avatar or User Icon */}
-                {isLoggedIn && userData ? (
+                {/* Dynamic Avatar based on context user */}
+                {isAuthenticated && user?.firstName ? (
                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-black text-[11px] mb-[2px]">
-                     {userData.firstName.charAt(0).toUpperCase()}
+                     {user.firstName.charAt(0).toUpperCase()}
                    </div>
                 ) : (
                    <User size={22} className="group-hover:scale-110 transition-transform"/>
                 )}
                 
                 <span className="text-[10px] font-bold">
-                  {isLoggedIn && userData ? `Hi, ${userData.firstName}` : 'Account'}
+                  {isAuthenticated && user?.firstName ? `Hi, ${user.firstName}` : 'Account'}
                 </span>
               </Link>
 
@@ -174,12 +167,12 @@ const Navbar = () => {
                     <div className="bg-white border border-gray-100 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden">
                         
                         {/* CONDITIONAL RENDER: Logged In vs Logged Out */}
-                        {isLoggedIn ? (
+                        {isAuthenticated ? (
                            <div className="px-5 py-4 bg-gray-50/50 border-b border-gray-100">
                                <p className="text-sm font-bold text-gray-900 mb-1">My Account</p>
                                
-                               {/* 🔥 SMART NUDGE LOGIC */}
-                               {userData?.defaultAddress ? (
+                               {/* SMART NUDGE LOGIC */}
+                               {user?.defaultAddress ? (
                                    <div className="flex items-start gap-1.5 p-2 bg-green-50 border border-green-100 rounded-md mb-3">
                                       <CheckCircle size={14} className="text-green-500 mt-0.5 shrink-0" />
                                       <p className="text-[10px] text-green-800 font-medium leading-tight">
@@ -216,7 +209,7 @@ const Navbar = () => {
                         </div>
 
                         {/* Logout Button */}
-                        {isLoggedIn && (
+                        {isAuthenticated && (
                            <div className="border-t border-gray-100 py-1">
                                <button 
                                  onClick={handleLogout}
