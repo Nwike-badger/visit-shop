@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import api from '../../api/axiosConfig';
 import { useCart } from '../../context/CartContext';
-import { useAuth } from '../../context/AuthContext'; // 🔥 Added missing import
-import { toast } from 'react-hot-toast'; // 🔥 Added toast for professional alerts
+import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-hot-toast';
+import { GoogleLogin } from '@react-oauth/google';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -14,63 +15,103 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { refreshCart } = useCart();
-  
-  // 🔥 Extract login from your global AuthContext
   const { login } = useAuth(); 
 
-  // If user was redirected from Checkout, go back there after login
+  // If user was redirected from Checkout or another protected route, go back there
   const from = location.state?.from?.pathname || "/";
 
+  // --- 1. STANDARD EMAIL/PASSWORD LOGIN ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    // Get the Guest ID to merge
     const guestId = localStorage.getItem('guest_cart_id');
 
     try {
       const response = await api.post('/v1/auth/login', {
         username: email,
         password: password,
-        guestId: guestId // 👈 CRITICAL: Tells backend to merge carts
+        guestId: guestId // Merges cart
       });
 
       const { accessToken } = response.data;
       
-      // 1. Update Global Auth State (This replaces manual localStorage.setItem)
       await login(accessToken);
-      
-      // 2. Clear Guest ID (Backend has merged it)
       localStorage.removeItem('guest_cart_id');
-
-      // 3. Refresh Cart Context
       refreshCart();
-
-      // 4. Success Toast & Navigate
+      
       toast.success("Welcome back!");
       navigate(from, { replace: true });
 
     } catch (err) {
       setError('Invalid email or password');
-    } finally {
+      setLoading(false);
+    } 
+  };
+
+  // --- 2. GOOGLE LOGIN ---
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setLoading(true);
+    const guestId = localStorage.getItem('guest_cart_id');
+    
+    try {
+      const response = await api.post('/v1/auth/google', {
+        token: credentialResponse.credential,
+        guestId: guestId
+      });
+
+      const { accessToken } = response.data;
+      
+      await login(accessToken);
+      localStorage.removeItem('guest_cart_id');
+      refreshCart();
+      
+      toast.success("Successfully logged in with Google!");
+      navigate(from, { replace: true });
+      
+    } catch (error) {
+      toast.error("Google sign-in failed. Please try again.");
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12 font-sans">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+        
         <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-900">Welcome Back</h2>
             <p className="text-sm text-gray-500 mt-2">Log in to continue shopping</p>
         </div>
         
-        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-100">{error}</div>}
+        {/* GOOGLE BUTTON */}
+        <div className="mb-6 flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => toast.error('Google login popup closed or failed')}
+              useOneTap
+              shape="rectangular"
+              size="large"
+              text="signin_with"
+              width="100%"
+            />
+        </div>
 
+        {/* DIVIDER */}
+        <div className="relative flex items-center mb-6">
+            <div className="flex-grow border-t border-gray-200"></div>
+            <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase tracking-wider">OR CONTINUE WITH EMAIL</span>
+            <div className="flex-grow border-t border-gray-200"></div>
+        </div>
+
+        {/* ERROR MESSAGE */}
+        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-100 font-medium">{error}</div>}
+
+        {/* STANDARD FORM */}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email Address</label>
+            <label className="block text-sm font-bold text-gray-700 mb-1.5">Email Address</label>
             <input 
               type="email" 
               required
@@ -78,10 +119,11 @@ const LoginPage = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
+              disabled={loading}
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
+            <label className="block text-sm font-bold text-gray-700 mb-1.5">Password</label>
             <input 
               type="password" 
               required
@@ -89,26 +131,29 @@ const LoginPage = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              disabled={loading}
             />
           </div>
+          
           <button 
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold hover:bg-black transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Logging in...' : 'Sign In'}
+            {loading ? 'Processing...' : 'Sign In'}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-8 text-center text-sm text-gray-600">
           Don't have an account?{' '}
           <Link 
             to="/signup" 
-            state={{ from: location.state?.from }} // Pass the "return to" location to signup too!
-            className="font-bold text-blue-600 hover:underline hover:text-blue-700"
+            state={{ from: location.state?.from }} 
+            className="font-bold text-blue-600 hover:underline hover:text-blue-800 transition-colors"
           >
             Create one now
           </Link>
         </div>
+
       </div>
     </div>
   );

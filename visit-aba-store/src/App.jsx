@@ -12,35 +12,38 @@ import SearchResults from "./pages/SearchResults";
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from "./context/AuthContext";
 import OrdersPage from "./pages/account/OrdersPage";
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 function App() {
+  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
   return (
-    <AuthProvider> 
-      <CartProvider>
-        <BrowserRouter>
-          <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
-            {/* 🔥 Add Toaster for beautiful alerts */}
-            <Toaster position="top-center" toastOptions={{ duration: 3000 }} /> 
-            <Navbar />
-            <main className="pt-4 pb-12">
-              <Routes>
-                <Route path="/" element={<Home />} />
-              <Route path="/cart" element={<Cart />} />
-              
-              
-              <Route path="/product/:id" element={<ProductPage />} />
-              <Route path="/checkout" element={<CheckoutPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/account" element={<AccountPage />} />
-              <Route path="/search" element={<SearchResults />} />
-              <Route path="/orders" element={<OrdersPage />} />
-              </Routes>
-            </main>
-          </div>
-        </BrowserRouter>
-      </CartProvider>
-    </AuthProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <AuthProvider> 
+        <CartProvider>
+          <BrowserRouter>
+            <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
+              <Toaster position="top-center" toastOptions={{ duration: 3000 }} /> 
+              <Navbar />
+              <main className="pt-4 pb-12">
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/cart" element={<Cart />} />
+                  <Route path="/product/:id" element={<ProductPage />} />
+                  <Route path="/checkout" element={<CheckoutPage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignupPage />} />
+                  <Route path="/account" element={<AccountPage />} />
+                  <Route path="/search" element={<SearchResults />} />
+                  <Route path="/orders" element={<OrdersPage />} />
+                </Routes>
+              </main>
+            </div>
+          </BrowserRouter>
+        </CartProvider>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
+
 export default App;
