@@ -9,9 +9,11 @@ const api = axios.create({
   },
 });
 
-// Request Interceptor (Your existing logic)
+// Request Interceptor
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  // 🔥 FIX: Safely check for both common token names
+  const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   } 
@@ -26,18 +28,30 @@ api.interceptors.request.use((config) => {
   return config;
 }, (error) => Promise.reject(error));
 
-// 🔥 NEW: Response Interceptor (The 401 Shield)
+
+// Response Interceptor (The Shield)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Prevent spamming toast messages if multiple requests fail at once
-      if (localStorage.getItem('token')) {
-          localStorage.removeItem('token');
-          toast.error("Session expired. Please log in again.");
-          // Send them to login and preserve intent
-          window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+    if (error.response) {
+      
+      // 🚨 401 UNAUTHORIZED (Token expired or completely invalid)
+      if (error.response.status === 401) {
+        const hasToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+        
+        if (hasToken) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('accessToken');
+            toast.error("Session expired. Please log in again.");
+            window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        }
       }
+      
+      // 🚨 403 FORBIDDEN (Valid token, but lacks Admin Roles)
+      else if (error.response.status === 403) {
+        toast.error("Access Denied: You do not have permission to perform this action.");
+      }
+      
     }
     return Promise.reject(error);
   }

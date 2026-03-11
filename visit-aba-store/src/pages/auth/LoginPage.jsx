@@ -6,6 +6,23 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { GoogleLogin } from '@react-oauth/google';
 
+// 🚀 HELPER: Instantly decode the JWT token to check roles without waiting for React State
+const getRolesFromToken = (token) => {
+  try {
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload));
+    
+    // Check all common Spring Boot Security mapping styles
+    const roles = decoded.roles || decoded.authorities || decoded.role || [];
+    if (Array.isArray(roles)) {
+       return roles.some(r => r === 'ROLE_ADMIN' || r.name === 'ROLE_ADMIN' || r.authority === 'ROLE_ADMIN');
+    }
+    return roles === 'ROLE_ADMIN';
+  } catch (e) {
+    return false;
+  }
+};
+
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +34,7 @@ const LoginPage = () => {
   const { refreshCart } = useCart();
   const { login } = useAuth(); 
 
-  // If user was redirected from Checkout or another protected route, go back there
+  // Capture where the user was trying to go before logging in
   const from = location.state?.from?.pathname || "/";
 
   // --- 1. STANDARD EMAIL/PASSWORD LOGIN ---
@@ -37,12 +54,26 @@ const LoginPage = () => {
 
       const { accessToken } = response.data;
       
+      // Update global context
       await login(accessToken);
       localStorage.removeItem('guest_cart_id');
       refreshCart();
       
-      toast.success("Welcome back!");
-      navigate(from, { replace: true });
+      // 🔥 SMART ROUTING ENGINE
+      const isAdmin = getRolesFromToken(accessToken);
+      
+      if (isAdmin) {
+          toast.success("Welcome back to the command center, Admin!", { icon: '🛡️' });
+          const destination = (from === "/" || from === "/login") ? "/admin/products" : from;
+          
+          // 🔥 Give React Context 100ms to update the global user state before routing
+          setTimeout(() => {
+              navigate(destination, { replace: true });
+          }, 100);
+      } else {
+          toast.success("Welcome back!");
+          navigate(from, { replace: true });
+      }
 
     } catch (err) {
       setError('Invalid email or password');
@@ -63,12 +94,22 @@ const LoginPage = () => {
 
       const { accessToken } = response.data;
       
+      // Update global context
       await login(accessToken);
       localStorage.removeItem('guest_cart_id');
       refreshCart();
       
-      toast.success("Successfully logged in with Google!");
-      navigate(from, { replace: true });
+      // 🔥 SMART ROUTING ENGINE (For Google Admins)
+      const isAdmin = getRolesFromToken(accessToken);
+      
+      if (isAdmin) {
+          toast.success("Admin authenticated via Google.", { icon: '🛡️' });
+          const destination = (from === "/" || from === "/login") ? "/admin/products" : from;
+          navigate(destination, { replace: true });
+      } else {
+          toast.success("Successfully logged in with Google!");
+          navigate(from, { replace: true });
+      }
       
     } catch (error) {
       toast.error("Google sign-in failed. Please try again.");
@@ -101,7 +142,7 @@ const LoginPage = () => {
         {/* DIVIDER */}
         <div className="relative flex items-center mb-6">
             <div className="flex-grow border-t border-gray-200"></div>
-            <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase tracking-wider">OR CONTINUE WITH EMAIL</span>
+            <span className="flex-shrink-0 mx-4 text-gray-400 text-[10px] font-bold uppercase tracking-widest">OR CONTINUE WITH EMAIL</span>
             <div className="flex-grow border-t border-gray-200"></div>
         </div>
 
@@ -111,11 +152,11 @@ const LoginPage = () => {
         {/* STANDARD FORM */}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1.5">Email Address</label>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Email Address</label>
             <input 
               type="email" 
               required
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+              className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-sm text-gray-900"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
@@ -123,11 +164,11 @@ const LoginPage = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1.5">Password</label>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Password</label>
             <input 
               type="password" 
               required
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+              className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-sm text-gray-900"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -137,18 +178,18 @@ const LoginPage = () => {
           
           <button 
             disabled={loading}
-            className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold hover:bg-black transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl shadow-gray-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Processing...' : 'Sign In'}
           </button>
         </form>
 
-        <div className="mt-8 text-center text-sm text-gray-600">
+        <div className="mt-8 text-center text-sm font-medium text-gray-500">
           Don't have an account?{' '}
           <Link 
             to="/signup" 
             state={{ from: location.state?.from }} 
-            className="font-bold text-blue-600 hover:underline hover:text-blue-800 transition-colors"
+            className="font-bold text-blue-600 hover:text-blue-700 transition-colors"
           >
             Create one now
           </Link>

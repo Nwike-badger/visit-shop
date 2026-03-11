@@ -71,8 +71,7 @@ const Cart = () => {
                                 {item.productName}
                             </Link>
                             
-                            {/* 🔥 THE VARIANTS - Rendered cleanly and professionally */}
-                            {/* 🔥 THE VARIANTS - Bulletproofed to catch whatever the backend names it */}
+                            
 {(() => {
     // Look for either name convention from your backend
     const attrs = item.attributes || item.variantAttributes;

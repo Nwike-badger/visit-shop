@@ -9,30 +9,32 @@ const useProduct = (id) => {
   useEffect(() => {
     if (!id) return;
 
+    let cancelled = false; // prevent state update after unmount
+
     const fetchProduct = async () => {
       setLoading(true);
+      setError(null);
       try {
         const response = await api.get(`/products/${id}`);
-        
-        // ✅ DATA TRANSFORMATION
-        // Backend sends: { product: {...}, variants: [...] }
-        // We flatten it for the UI
-        console.log("RAW API RESPONSE:", response.data);
+
+        // Backend: { product: {...}, variants: [...] }
         const { product: productData, variants } = response.data;
-        
-        setProduct({
+
+        if (!cancelled) {
+          setProduct({
             ...productData,
-            variants: variants // Attach variants to the main object
-        });
+            variants: variants || [],
+          });
+        }
       } catch (err) {
-        console.error("Error fetching product details:", err);
-        setError(err);
+        if (!cancelled) setError(err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchProduct();
+    return () => { cancelled = true; }; // cleanup on unmount or id change
   }, [id]);
 
   return { product, loading, error };

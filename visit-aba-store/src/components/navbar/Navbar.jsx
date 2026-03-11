@@ -1,47 +1,72 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import { useAuth } from '../../context/AuthContext'; // Global Auth Context
+import { useAuth } from '../../context/AuthContext'; 
 import { 
   Search, 
   ShoppingCart, 
   User, 
-  Heart, 
   Menu, 
   X,
   HelpCircle,
   Phone,
   LogOut,
   AlertCircle,
-  CheckCircle 
+  CheckCircle,
+  ShieldCheck 
 } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
 import CategoryMenu from '../navbar/CategoryMenu';
+
+// 🚀 HELPER: Decodes the JWT token to check roles reliably since the backend DTO might drop them
+const checkAdminFromToken = () => {
+  const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+  if (!token) return false;
+  try {
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload));
+    const roles = decoded.roles || decoded.authorities || decoded.role || [];
+    if (Array.isArray(roles)) {
+       return roles.some(r => r === 'ROLE_ADMIN' || r.name === 'ROLE_ADMIN' || r.authority === 'ROLE_ADMIN');
+    }
+    return roles === 'ROLE_ADMIN';
+  } catch (e) {
+    return false;
+  }
+};
 
 const Navbar = () => {
   const { cartCount, cartTotal } = useCart();
   const { categories, loading: categoriesLoading } = useCategories();
   
-  // 🔥 Only use global Auth State! No more manual localStorage checks here.
   const { user, isAuthenticated, logout } = useAuth(); 
   
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Component State
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
-  // Handle Scroll Effect for glassmorphism
+  // 🛡️ Admin Check Logic: Rely on the Token first!
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    // Calculate this whenever auth state changes
+    if (isAuthenticated) {
+        setIsAdmin(checkAdminFromToken() || user?.roles?.includes('ROLE_ADMIN') || user?.role === 'ROLE_ADMIN');
+    } else {
+        setIsAdmin(false);
+    }
+  }, [isAuthenticated, user]);
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Handle Search Submission
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -49,10 +74,9 @@ const Navbar = () => {
     }
   };
 
-  // Safe Logout using Context
   const handleLogout = () => {
-    logout(); // Let AuthContext clear tokens and show toast
-    navigate('/'); // Soft redirect to home
+    logout(); 
+    navigate('/'); 
   };
 
   return (
@@ -138,7 +162,7 @@ const Navbar = () => {
               <span className="text-[10px] font-bold">Help</span>
             </Link>
 
-            {/* 🔥 3. INTELLIGENT ACCOUNT DROPDOWN */}
+            {/* 3. INTELLIGENT ACCOUNT DROPDOWN */}
             <div 
               className="relative z-50 group" 
               onMouseEnter={() => setIsAccountOpen(true)} 
@@ -148,7 +172,6 @@ const Navbar = () => {
                 to={isAuthenticated ? "/account" : "/login"} 
                 className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${isAuthenticated ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'}`}
               >
-                {/* Dynamic Avatar based on context user */}
                 {isAuthenticated && user?.firstName ? (
                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-black text-[11px] mb-[2px]">
                      {user.firstName.charAt(0).toUpperCase()}
@@ -204,6 +227,13 @@ const Navbar = () => {
 
                         {/* Standard Links */}
                         <div className="py-2">
+                            {/* 🔥 ADMIN PORTAL LINK: ONLY VISIBLE TO ADMINS */}
+                            {isAdmin && (
+                              <Link to="/admin/products" className="flex items-center gap-2 px-5 py-2.5 text-sm text-blue-700 font-bold bg-blue-50/50 hover:bg-blue-100 transition-colors border-b border-blue-100 mb-1">
+                                <ShieldCheck size={16} /> Admin Portal
+                              </Link>
+                            )}
+
                             <Link to="/orders" className="block px-5 py-2.5 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 font-medium transition-colors">📦 My Orders</Link>
                             <Link to="/wishlist" className="block px-5 py-2.5 text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors">❤️ Saved Items</Link>
                         </div>

@@ -10,7 +10,12 @@ const useProducts = () => {
     const fetchProducts = async () => {
       try {
         const res = await api.get("/products");
-        setProducts(res.data);
+        
+        // 🔥 THE ENTERPRISE FIX: 
+        // If it's a Spring Boot Page object, grab .content. Otherwise, use the raw data.
+        const productArray = res.data.content ? res.data.content : res.data;
+        
+        setProducts(productArray);
       } catch (err) {
         console.error(err);
         setError("Could not load products");
