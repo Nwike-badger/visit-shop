@@ -4,24 +4,24 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axiosConfig';
 import { toast } from 'react-hot-toast';
-import { GoogleLogin } from '@react-oauth/google'; // 🔥 IMPORT GOOGLE
+import { GoogleLogin } from '@react-oauth/google';
 import { MapPin, ShieldCheck, CreditCard, ShoppingCart, UserCheck } from 'lucide-react';
+import AddressForm from '../components/AddressForm';
 
 const CheckoutPage = () => {
   const { cartItems, cartTotal, clearCart, refreshCart } = useCart();
   const { user, isAuthenticated, loading: authLoading, login } = useAuth();
   const navigate = useNavigate();
   
-  // States
   const [loading, setLoading] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+  const [authMode, setAuthMode] = useState('login'); 
   
-  // Form States
   const [authForm, setAuthForm] = useState({ firstName: '', lastName: '', email: '', password: '' });
-  const [address, setAddress] = useState({ streetAddress: '', city: '', state: '', postalCode: '', country: 'Nigeria' });
+  
+  // Updated state to match new fields
+  const [address, setAddress] = useState({ streetAddress: '', city: '', state: '', phoneNumber: '', country: 'Nigeria' });
   const [hasSavedAddress, setHasSavedAddress] = useState(false);
 
-  // Address pre-fill effect
   useEffect(() => {
     if (isAuthenticated && user?.defaultAddress) {
         setAddress(user.defaultAddress);
@@ -29,25 +29,16 @@ const CheckoutPage = () => {
     }
   }, [isAuthenticated, user]);
 
-  // Handlers
   const handleAuthChange = (e) => setAuthForm({ ...authForm, [e.target.name]: e.target.value });
-  const handleAddressChange = (e) => setAddress({ ...address, [e.target.name]: e.target.value });
 
-  // 🚀 INLINE GOOGLE AUTH
   const handleGoogleSuccess = async (credentialResponse) => {
     setLoading(true);
     const guestId = localStorage.getItem('guest_cart_id');
-
     try {
-      const res = await api.post('/v1/auth/google', {
-        token: credentialResponse.credential,
-        guestId: guestId
-      });
-
+      const res = await api.post('/v1/auth/google', { token: credentialResponse.credential, guestId });
       await login(res.data.accessToken);
       localStorage.removeItem('guest_cart_id');
       refreshCart();
-
       toast.success("Successfully logged in with Google! Let's complete your order.");
     } catch (error) {
       toast.error(error.response?.data?.message || "Google authentication failed. Please try again.");
@@ -56,12 +47,10 @@ const CheckoutPage = () => {
     }
   };
 
-  // 🚀 INLINE EMAIL AUTH
   const handleInlineAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
     const guestId = localStorage.getItem('guest_cart_id');
-
     try {
       if (authMode === 'login') {
         const res = await api.post('/v1/auth/login', { username: authForm.email, password: authForm.password, guestId });
@@ -73,7 +62,6 @@ const CheckoutPage = () => {
         await login(res.data.accessToken);
         toast.success("Account created! Let's complete your order.");
       }
-      
       localStorage.removeItem('guest_cart_id');
       refreshCart();
     } catch (error) {
@@ -83,18 +71,15 @@ const CheckoutPage = () => {
     }
   };
 
-  // 🚀 PLACE ORDER 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     const orderRequest = {
         items: cartItems.map(item => ({ variantId: item.variantId, quantity: item.quantity })),
         shippingAddress: address,
         billingAddress: address,
         paymentMethod: "BANK_TRANSFER" 
     };
-
     try {
         const response = await api.post('/v1/orders', orderRequest);
         toast.success(`Order #${response.data.orderNumber} Placed Successfully!`);
@@ -128,43 +113,30 @@ const CheckoutPage = () => {
           
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             
-            {/* LEFT COLUMN: Dynamic Flow (Auth -> Shipping) */}
             <div className="lg:col-span-7 xl:col-span-8 space-y-6">
                
                {!isAuthenticated ? (
-                   // --- STEP 1: INLINE AUTHENTICATION ---
                    <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100">
                        <div className="mb-6 border-b border-gray-100 pb-4">
                            <h2 className="text-xl font-bold text-gray-900">Account Details</h2>
                            <p className="text-sm text-gray-500 mt-1">Sign in or create an account to secure your order.</p>
                        </div>
-
-                       {/* 🔥 GOOGLE BUTTON */}
                        <div className="mb-6 flex justify-center max-w-md">
                            <GoogleLogin
                              onSuccess={handleGoogleSuccess}
                              onError={() => toast.error('Google login popup closed or failed')}
-                             useOneTap
-                             shape="rectangular"
-                             size="large"
-                             text="continue_with"
-                             width="100%"
+                             useOneTap shape="rectangular" size="large" text="continue_with" width="100%"
                            />
                        </div>
-
-                       {/* 🔥 DIVIDER */}
                        <div className="relative flex items-center mb-6 max-w-md">
                            <div className="flex-grow border-t border-gray-200"></div>
                            <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase tracking-wider">OR USE EMAIL</span>
                            <div className="flex-grow border-t border-gray-200"></div>
                        </div>
-
-                       {/* Toggle Login/Signup */}
                        <div className="flex bg-gray-100 p-1 rounded-lg mb-6 max-w-md">
                            <button onClick={() => setAuthMode('login')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${authMode === 'login' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Log In</button>
                            <button onClick={() => setAuthMode('signup')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${authMode === 'signup' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Sign Up</button>
                        </div>
-
                        <form onSubmit={handleInlineAuth} className="space-y-4 max-w-md">
                            {authMode === 'signup' && (
                                <div className="grid grid-cols-2 gap-4">
@@ -186,16 +158,13 @@ const CheckoutPage = () => {
                                <label className="block text-xs font-bold text-gray-700 mb-1">Password</label>
                                <input required type="password" name="password" minLength={6} onChange={handleAuthChange} disabled={loading} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-100 outline-none" />
                            </div>
-                           
                            <button disabled={loading} className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold mt-2 hover:bg-black transition-all disabled:opacity-50">
                                {loading ? 'Processing...' : authMode === 'login' ? 'Continue to Shipping' : 'Create Account & Continue'}
                            </button>
                        </form>
                    </div>
                ) : (
-                   // --- STEP 2: SHIPPING ADDRESS (Shows only after auth) ---
                    <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                       
                        <div className="flex items-center gap-3 bg-green-50 text-green-800 p-4 rounded-xl mb-8 border border-green-100">
                            <UserCheck size={20} className="text-green-600"/>
                            <span className="text-sm font-medium">Logged in as <span className="font-bold">{user?.email}</span></span>
@@ -209,49 +178,24 @@ const CheckoutPage = () => {
                            <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl relative">
                                <span className="absolute top-4 right-4 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase">Default</span>
                                <p className="font-bold text-gray-900 mb-2">Delivering to:</p>
+                               <p className="text-gray-700 text-sm font-medium mb-1">{address.phoneNumber}</p>
                                <p className="text-gray-700">{address.streetAddress}</p>
                                <p className="text-gray-700">{address.city}, {address.state}</p>
-                               <button type="button" onClick={() => setHasSavedAddress(false)} className="mt-4 text-sm font-bold text-blue-600 hover:text-blue-800 underline">
-                                 Deliver to a different address
+                               <button type="button" onClick={() => setHasSavedAddress(false)} className="mt-5 text-sm font-bold text-gray-500 hover:text-gray-900 border border-gray-300 px-4 py-2 rounded-lg bg-white">
+                                 Change delivery address
                                </button>
                            </div>
                        ) : (
-                           <form id="checkout-form" className="space-y-4">
-                              <div>
-                                  <label className="block text-sm font-semibold text-gray-700 mb-1">Street Address</label>
-                                  <input name="streetAddress" value={address.streetAddress} placeholder="e.g. 12 Awolowo Way" required disabled={loading} className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all" onChange={handleAddressChange} />
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                      <label className="block text-sm font-semibold text-gray-700 mb-1">City</label>
-                                      <input name="city" value={address.city} placeholder="Ikeja" required disabled={loading} className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500" onChange={handleAddressChange} />
-                                  </div>
-                                  <div>
-                                      <label className="block text-sm font-semibold text-gray-700 mb-1">State</label>
-                                      <input name="state" value={address.state} placeholder="Lagos" required disabled={loading} className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500" onChange={handleAddressChange} />
-                                  </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                      <label className="block text-sm font-semibold text-gray-700 mb-1">Postal Code (Optional)</label>
-                                      <input name="postalCode" value={address.postalCode} placeholder="100001" disabled={loading} className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500" onChange={handleAddressChange} />
-                                  </div>
-                                  <div>
-                                      <label className="block text-sm font-semibold text-gray-700 mb-1">Country</label>
-                                      <input name="country" value="Nigeria" disabled className="w-full p-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-500" />
-                                  </div>
-                              </div>
-                           </form>
+                           // 🔥 INJECT REUSABLE COMPONENT
+                           <AddressForm address={address} setAddress={setAddress} loading={loading} />
                        )}
                    </div>
                )}
             </div>
 
-            {/* RIGHT COLUMN: Order Summary */}
             <div className="lg:col-span-5 xl:col-span-4">
                 <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100 sticky top-24">
                    <h2 className="text-xl font-bold mb-6 border-b border-gray-100 pb-4">Order Summary</h2>
-                   
                    <div className="space-y-4 mb-6 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                       {cartItems.map((item, index) => (
                           <div key={`${item.variantId}-${index}`} className="flex justify-between items-start gap-4">
@@ -283,16 +227,15 @@ const CheckoutPage = () => {
                    <button 
                      type="button" 
                      onClick={handlePlaceOrder} 
-                     disabled={loading || !isAuthenticated || (!hasSavedAddress && !address.streetAddress)}
+                     disabled={loading || !isAuthenticated || (!hasSavedAddress && (!address.streetAddress || !address.state || !address.city || !address.phoneNumber))}
                      className={`w-full py-4 rounded-xl font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2
-                        ${loading || !isAuthenticated || (!hasSavedAddress && !address.streetAddress) 
+                        ${loading || !isAuthenticated || (!hasSavedAddress && (!address.streetAddress || !address.state || !address.city || !address.phoneNumber))
                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' 
                             : 'bg-green-600 hover:bg-green-700 shadow-green-200 hover:-translate-y-1'}
                      `}
                    >
                      {loading ? 'Processing...' : !isAuthenticated ? 'Sign In to Proceed' : <><CreditCard size={20}/> Confirm Order</>}
                    </button>
-                   
                    <div className="flex items-center justify-center gap-2 mt-4 text-xs text-gray-500">
                        <ShieldCheck size={14}/> Encrypted & Secure Checkout
                    </div>
