@@ -33,11 +33,14 @@ const ProductInfo = ({ product }) => {
     [product.variants]
   );
   
-  const hasVariants = activeVariants.length > 0;
+  // 🔥 THE FIX: Check if variants actually have attributes (like Size or Color)
+  const hasRealVariants = useMemo(() => {
+    return activeVariants.some(v => v.attributes && Object.keys(v.attributes).length > 0);
+  }, [activeVariants]);
 
-  // ── Extract unique attributes (e.g., Color: ['Red', 'Blue'], Size: ['S', 'M']) ──
+  // ── Extract unique attributes (e.g., Color: ['Red', 'Blue']) ──
   const availableAttributes = useMemo(() => {
-    if (!hasVariants) return {};
+    if (!hasRealVariants) return {};
     const attrs = {};
     activeVariants.forEach(variant => {
       if (!variant.attributes) return;
@@ -46,31 +49,34 @@ const ProductInfo = ({ product }) => {
         attrs[key].add(value);
       });
     });
-    // Convert Sets to Arrays for rendering
     const result = {};
     Object.keys(attrs).forEach(key => {
       result[key] = Array.from(attrs[key]);
     });
     return result;
-  }, [activeVariants, hasVariants]);
+  }, [activeVariants, hasRealVariants]);
 
-  // ── Derive the currently active variant based on selected options ──
+  // ── Derive the currently active variant ──
   const activeVariant = useMemo(() => {
-    if (!hasVariants || Object.keys(selectedOptions).length === 0) return null;
+    if (!hasRealVariants) {
+      // If it's a simple product, the "active variant" is just the hidden default one
+      return activeVariants[0] || null;
+    }
+    if (Object.keys(selectedOptions).length === 0) return null;
     return activeVariants.find(v => 
       Object.entries(selectedOptions).every(([k, val]) => v.attributes?.[k] === val)
     ) || null;
-  }, [selectedOptions, activeVariants, hasVariants]);
+  }, [selectedOptions, activeVariants, hasRealVariants]);
 
   // ── Auto-select the first available variant on load ──
   useEffect(() => {
-    if (hasVariants && Object.keys(selectedOptions).length === 0) {
+    if (hasRealVariants && Object.keys(selectedOptions).length === 0) {
       const inStock = activeVariants.find(v => v.stockQuantity > 0) || activeVariants[0];
       if (inStock && inStock.attributes) {
         setSelectedOptions(inStock.attributes);
       }
     }
-  }, [hasVariants, activeVariants]); // Run once when variants load
+  }, [hasRealVariants, activeVariants]);
 
   // Reset quantity when switching variants
   useEffect(() => {
@@ -81,7 +87,6 @@ const ProductInfo = ({ product }) => {
   const handleOptionSelect = (attributeName, value) => {
     const newSelections = { ...selectedOptions, [attributeName]: value };
     
-    // Check if this new combination actually exists
     const exactMatchExists = activeVariants.some(v => 
       Object.entries(newSelections).every(([k, val]) => v.attributes?.[k] === val)
     );
@@ -89,7 +94,6 @@ const ProductInfo = ({ product }) => {
     if (exactMatchExists) {
       setSelectedOptions(newSelections);
     } else {
-      // If combo doesn't exist (e.g., Red + XL is invalid), find the first valid variant that HAS the newly clicked option
       const fallbackVariant = activeVariants.find(v => v.attributes?.[attributeName] === value);
       if (fallbackVariant && fallbackVariant.attributes) {
         setSelectedOptions(fallbackVariant.attributes);
@@ -100,7 +104,9 @@ const ProductInfo = ({ product }) => {
   // ── Derived display values ──
   const displayPrice = activeVariant ? activeVariant.price : (product.minPrice || product.price || product.basePrice || 0);
   const displayComparePrice = activeVariant ? activeVariant.compareAtPrice : product.originalPrice;
-  const currentStock = activeVariant ? (activeVariant.stockQuantity || 0) : (!hasVariants ? (product.totalStock || product.stockQuantity || 0) : 0);
+  
+  // 🔥 THE FIX: Because activeVariant now safely grabs the default item, this reads perfectly!
+  const currentStock = activeVariant ? (activeVariant.stockQuantity || 0) : (product.totalStock || product.stockQuantity || 0);
   const onSale = activeVariant?.activeCampaignId || product.activeCampaignId;
 
   // ── Stock status logic ──
@@ -113,6 +119,7 @@ const ProductInfo = ({ product }) => {
   }, [currentStock]);
 
   const handleAddToCart = async () => {
+    // If it's a simple product, activeVariant.id will correctly grab the hidden default variant ID!
     const variantId = activeVariant?.id || product.id;
 
     if (!variantId) {
@@ -134,7 +141,7 @@ const ProductInfo = ({ product }) => {
   };
 
   const isOutOfStock = currentStock === 0;
-  const canAddToCart = !isOutOfStock && (hasVariants ? activeVariant !== null : true);
+  const canAddToCart = !isOutOfStock && (hasRealVariants ? activeVariant !== null : true);
 
   return (
     <div className="space-y-7 font-sans">
@@ -192,8 +199,8 @@ const ProductInfo = ({ product }) => {
         </div>
       )}
 
-      {/* 🔥 NEW DISCRETE VARIANT SELECTOR ── */}
-      {hasVariants && Object.keys(availableAttributes).length > 0 && (
+      {/* ── VARIANT SELECTOR ── */}
+      {hasRealVariants && Object.keys(availableAttributes).length > 0 && (
         <div className="space-y-5 border-t border-gray-100 pt-5">
           {Object.entries(availableAttributes).map(([attributeName, options]) => (
             <div key={attributeName} className="space-y-2.5">
