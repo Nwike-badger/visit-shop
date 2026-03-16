@@ -60,19 +60,15 @@ const ProductPage = () => {
     </div>
   );
 
-  // ── Safely extract gallery images ──────────────────────────────────────────
-  // Images can be: [{url, altText}] or ['url-string']
+  
   const galleryImages = (product.images || [])
     .map(img => (typeof img === 'string' ? img : img?.url))
     .filter(Boolean);
 
-  // ── Only pass ACTIVE variants downstream ───────────────────────────────────
-  // FIX: Jackson maps `boolean isActive` → `"active"` in JSON
+  
   const activeVariants = (product.variants || []).filter(v => v.active !== false);
 
-  // ── Build the enhanced product object ─────────────────────────────────────
-  // FIX: use minPrice (computed from variants) as the "from" price for display
-  // basePrice is only accurate when there are no variants
+  
   const enhancedProduct = {
     ...product,
     variants: activeVariants,

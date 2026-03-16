@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Star, StarHalf, Minus, Plus, ShoppingBag, CheckCircle, AlertTriangle, Info, PackageX } from 'lucide-react';
+import { Star, StarHalf, Minus, Plus, ShoppingBag, CheckCircle, AlertTriangle, PackageX } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 
 const Stars = ({ rating = 0, count = 0 }) => {
@@ -22,7 +22,8 @@ const Stars = ({ rating = 0, count = 0 }) => {
 const ProductInfo = ({ product }) => {
   const { addToCart } = useCart();
 
-  const [activeVariant, setActiveVariant] = useState(null);
+  // ── State ──
+  const [selectedOptions, setSelectedOptions] = useState({});
   const [quantity, setQuantity] = useState(1);
   const [cartState, setCartState] = useState('idle'); // idle | loading | success | error
 
@@ -31,22 +32,70 @@ const ProductInfo = ({ product }) => {
     () => (product.variants || []).filter(v => v.active !== false),
     [product.variants]
   );
-
+  
   const hasVariants = activeVariants.length > 0;
+
+  // ── Extract unique attributes (e.g., Color: ['Red', 'Blue'], Size: ['S', 'M']) ──
+  const availableAttributes = useMemo(() => {
+    if (!hasVariants) return {};
+    const attrs = {};
+    activeVariants.forEach(variant => {
+      if (!variant.attributes) return;
+      Object.entries(variant.attributes).forEach(([key, value]) => {
+        if (!attrs[key]) attrs[key] = new Set();
+        attrs[key].add(value);
+      });
+    });
+    // Convert Sets to Arrays for rendering
+    const result = {};
+    Object.keys(attrs).forEach(key => {
+      result[key] = Array.from(attrs[key]);
+    });
+    return result;
+  }, [activeVariants, hasVariants]);
+
+  // ── Derive the currently active variant based on selected options ──
+  const activeVariant = useMemo(() => {
+    if (!hasVariants || Object.keys(selectedOptions).length === 0) return null;
+    return activeVariants.find(v => 
+      Object.entries(selectedOptions).every(([k, val]) => v.attributes?.[k] === val)
+    ) || null;
+  }, [selectedOptions, activeVariants, hasVariants]);
 
   // ── Auto-select the first available variant on load ──
   useEffect(() => {
-    if (hasVariants && !activeVariant) {
-      // Try to auto-select one that is in stock, otherwise just pick the first one
-      const inStock = activeVariants.find(v => v.stockQuantity > 0);
-      setActiveVariant(inStock || activeVariants[0]);
+    if (hasVariants && Object.keys(selectedOptions).length === 0) {
+      const inStock = activeVariants.find(v => v.stockQuantity > 0) || activeVariants[0];
+      if (inStock && inStock.attributes) {
+        setSelectedOptions(inStock.attributes);
+      }
     }
-  }, [hasVariants, activeVariants, activeVariant]);
+  }, [hasVariants, activeVariants]); // Run once when variants load
 
   // Reset quantity when switching variants
   useEffect(() => {
     setQuantity(1);
-  }, [activeVariant]);
+  }, [selectedOptions]);
+
+  // ── Handle Option Selection ──
+  const handleOptionSelect = (attributeName, value) => {
+    const newSelections = { ...selectedOptions, [attributeName]: value };
+    
+    // Check if this new combination actually exists
+    const exactMatchExists = activeVariants.some(v => 
+      Object.entries(newSelections).every(([k, val]) => v.attributes?.[k] === val)
+    );
+
+    if (exactMatchExists) {
+      setSelectedOptions(newSelections);
+    } else {
+      // If combo doesn't exist (e.g., Red + XL is invalid), find the first valid variant that HAS the newly clicked option
+      const fallbackVariant = activeVariants.find(v => v.attributes?.[attributeName] === value);
+      if (fallbackVariant && fallbackVariant.attributes) {
+        setSelectedOptions(fallbackVariant.attributes);
+      }
+    }
+  };
 
   // ── Derived display values ──
   const displayPrice = activeVariant ? activeVariant.price : (product.minPrice || product.price || product.basePrice || 0);
@@ -72,7 +121,6 @@ const ProductInfo = ({ product }) => {
     }
 
     setCartState('loading');
-    // Pass the exact attributes of the clicked box to the cart for rendering on the checkout page
     const attributes = activeVariant ? activeVariant.attributes : {};
     const success = await addToCart(variantId, quantity, attributes);
     
@@ -144,55 +192,43 @@ const ProductInfo = ({ product }) => {
         </div>
       )}
 
-      {/* 🔥 DISCRETE VARIANT SELECTOR (The Enterprise Upgrade) ── */}
-      {hasVariants && (
-        <div className="space-y-3 border-t border-gray-100 pt-5">
-          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">
-             Available Models
-          </span>
-          <div className="grid grid-cols-1 gap-3">
-            {activeVariants.map((v) => {
-              const isSelected = activeVariant?.id === v.id;
-              const isVariantOOS = v.stockQuantity === 0;
+      {/* 🔥 NEW DISCRETE VARIANT SELECTOR ── */}
+      {hasVariants && Object.keys(availableAttributes).length > 0 && (
+        <div className="space-y-5 border-t border-gray-100 pt-5">
+          {Object.entries(availableAttributes).map(([attributeName, options]) => (
+            <div key={attributeName} className="space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">
+                  {attributeName}:
+                </span>
+                <span className="text-sm font-black text-gray-900">
+                  {selectedOptions[attributeName]}
+                </span>
+              </div>
               
-              // Map attributes {Color: "Black", Storage: "128GB"} -> "Black • 128GB"
-              const label = Object.values(v.attributes || {}).join(' • ') || v.sku;
-
-              return (
-                <button
-                  key={v.id}
-                  onClick={() => setActiveVariant(v)}
-                  className={`
-                    flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-200 text-left
-                    ${isSelected ? 'border-gray-900 bg-gray-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-300 bg-white'}
-                    ${isVariantOOS && !isSelected ? 'opacity-60' : ''}
-                  `}
-                >
-                  <div className="flex flex-col pr-4">
-                    <span className={`font-bold text-sm ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
-                       {label}
-                    </span>
-                    {isVariantOOS && (
-                      <span className="flex items-center gap-1 mt-1 text-[10px] text-red-500 font-bold uppercase tracking-wider">
-                         <PackageX size={12}/> Out of Stock
-                      </span>
-                    )}
-                  </div>
+              <div className="flex flex-wrap gap-2.5">
+                {options.map((option) => {
+                  const isSelected = selectedOptions[attributeName] === option;
                   
-                  <div className="flex flex-col items-end shrink-0">
-                    <span className={`font-black tracking-tight ${isSelected ? 'text-gray-900' : 'text-gray-600'}`}>
-                      ₦{Number(v.price).toLocaleString()}
-                    </span>
-                    {v.compareAtPrice > v.price && (
-                      <span className="text-[10px] text-gray-400 line-through">
-                        ₦{Number(v.compareAtPrice).toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  return (
+                    <button
+                      key={option}
+                      onClick={() => handleOptionSelect(attributeName, option)}
+                      className={`
+                        px-4 py-2.5 text-sm font-bold rounded-xl border-2 transition-all duration-200
+                        ${isSelected 
+                          ? 'border-gray-900 bg-gray-900 text-white shadow-md' 
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50'
+                        }
+                      `}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

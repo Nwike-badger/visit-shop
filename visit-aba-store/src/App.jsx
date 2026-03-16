@@ -19,7 +19,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./components/admin/AdminLayout";
 
 // --- ADMIN PAGES ---
-import AdminProducts from "./pages/admin/AdminProducts";
+import AdminProducts from "./pages/admin/AdminProducts/Index";
 import AdminCampaigns from "./pages/admin/AdminCampaigns";
 
 function App() {
