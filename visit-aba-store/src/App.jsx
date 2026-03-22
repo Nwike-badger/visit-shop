@@ -13,6 +13,10 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from "./context/AuthContext";
 import OrdersPage from "./pages/account/OrdersPage";
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import OrderDetailPage from "./pages/account/OrderDetailPage";
+
+
+import PaymentCallback from "./pages/PaymentCallback";
 
 // --- ROUTE PROTECTION & LAYOUTS ---
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -21,6 +25,9 @@ import AdminLayout from "./components/admin/AdminLayout";
 // --- ADMIN PAGES ---
 import AdminProducts from "./pages/admin/AdminProducts/Index";
 import AdminCampaigns from "./pages/admin/AdminCampaigns";
+
+
+
 
 function App() {
   const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -45,12 +52,15 @@ function App() {
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/signup" element={<SignupPage />} />
                   <Route path="/search" element={<SearchResults />} />
+                  
+                  
+                  <Route path="/payment/callback" element={<PaymentCallback />} />
 
-                  {/* --- PROTECTED USER ROUTES --- */}
-                  {/* Any user logged in can access these */}
+                  
                   <Route element={<ProtectedRoute />}>
                       <Route path="/account" element={<AccountPage />} />
                       <Route path="/orders" element={<OrdersPage />} />
+                      <Route path="/orders/:orderNumber"  element={<OrderDetailPage />} /> 
                   </Route>
 
                   {/* --- PROTECTED ADMIN ROUTES --- */}
