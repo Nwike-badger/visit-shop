@@ -3,9 +3,36 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Package, MapPin, CreditCard, Clock,
   CheckCircle, Truck, XCircle, RefreshCw, ShoppingBag,
-  Receipt, AlertCircle
+  Receipt, AlertCircle, Loader2
 } from 'lucide-react';
 import api from '../../api/axiosConfig';
+
+// ── Retry Payment button (only shown for PENDING_PAYMENT orders) ──────────────
+const RetryPaymentButton = ({ orderId }) => {
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      const res = await api.post(`/v1/payments/retry/${orderId}`);
+      if (res.data?.checkoutUrl) window.location.href = res.data.checkoutUrl;
+    } catch (err) {
+      alert('Could not initialize payment. Please try again.');
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleRetry}
+      disabled={retrying}
+      className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-lg"
+    >
+      {retrying ? <><Loader2 size={16} className="animate-spin" /> Initializing...</> : <><CreditCard size={16} /> Complete Payment</>}
+    </button>
+  );
+};
 
 // ── Date parsing (same as OrdersPage) ────────────────────────────────────────
 const parseSpringDate = (value) => {
@@ -358,6 +385,11 @@ const OrderDetailPage = () => {
                 support@exploreaba.ng
               </a>
             </div>
+
+            {/* Retry payment for pending orders */}
+            {order.orderStatus === 'PENDING_PAYMENT' && (
+              <RetryPaymentButton orderId={order.id} />
+            )}
           </div>
         </div>
       </div>

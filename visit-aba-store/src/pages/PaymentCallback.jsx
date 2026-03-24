@@ -167,10 +167,18 @@ const PaymentCallback = () => {
               Check My Orders
             </button>
             <button
-              onClick={() => navigate('/checkout')}
+              onClick={async () => {
+                if (!orderId) { navigate('/checkout'); return; }
+                try {
+                  const res = await api.post(`/v1/payments/retry/${orderId}`);
+                  if (res.data?.checkoutUrl) window.location.href = res.data.checkoutUrl;
+                } catch {
+                  navigate('/checkout');
+                }
+              }}
               className="flex-1 bg-gray-100 text-gray-900 py-3.5 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors"
             >
-              Try Again
+              Retry Payment
             </button>
           </div>
         </div>
