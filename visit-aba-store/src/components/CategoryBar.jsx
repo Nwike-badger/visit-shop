@@ -9,21 +9,45 @@ const CategoryBar = () => {
   useEffect(() => {
     const fetchFeatured = async () => {
       try {
-        
         const response = await api.get('/categories/featured'); 
-        setCategories(response.data);
+        
+        // 🔥 THE SHIELD: Let's figure out exactly what the API sent back
+        const data = response.data;
+
+        if (Array.isArray(data)) {
+          // Scenario 1: It's a perfect array (Works locally)
+          setCategories(data);
+        } else if (data && Array.isArray(data.content)) {
+          // Scenario 2: Spring Boot paginated response { content: [...] }
+          setCategories(data.content);
+        } else if (data && Array.isArray(data.data)) {
+          // Scenario 3: Custom Spring Boot wrapper { data: [...] }
+          setCategories(data.data);
+        } else if (typeof data === 'string' && data.includes('ngrok')) {
+          // Scenario 4: Ngrok HTML warning page blocked the request
+          console.error("🚨 NGROK BLOCKED THE REQUEST. Check your bypass headers.");
+          setCategories([]);
+        } else {
+          // Scenario 5: Unknown data structure
+          console.error("🚨 API returned an unknown data structure:", data);
+          setCategories([]);
+        }
+
       } catch (error) {
         console.error("Failed to fetch categories", error);
+        setCategories([]); // Always fallback to an array on error
       } finally {
         setLoading(false);
       }
     };
+    
     fetchFeatured();
   }, []);
 
-  // ... (Keep your Skeleton Loader exactly as is) ...
+  // ... (Keep your Skeleton Loader exactly as is if you have one) ...
 
-  if (!categories || categories.length === 0) return null;
+  // 🔥 STricter check: Guarantee it's an array and has items before rendering
+  if (!Array.isArray(categories) || categories.length === 0) return null;
 
   return (
     <div className="bg-white border-b border-gray-100 shadow-sm mb-8 sticky top-0 opacity-95 backdrop-blur-sm z-30">
@@ -31,7 +55,8 @@ const CategoryBar = () => {
         
         <div className="flex gap-4 md:gap-6 overflow-x-auto pb-2 scrollbar-hide snap-x items-start">
           
-          {categories.map((category) => (
+          {/* 🔥 Optional chaining (?.) added just in case */}
+          {categories?.map((category) => (
             <Link 
               key={category.id || category.slug} 
               to={`/category/${category.slug}`}

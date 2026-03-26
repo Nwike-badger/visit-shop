@@ -25,15 +25,15 @@ const ProductInfo = ({ product }) => {
   // ── State ──
   const [selectedOptions, setSelectedOptions] = useState({});
   const [quantity, setQuantity] = useState(1);
-  const [cartState, setCartState] = useState('idle'); // idle | loading | success | error
+  const [cartState, setCartState] = useState('idle'); 
 
-  // Only consider ACTIVE variants
+  
   const activeVariants = useMemo(
     () => (product.variants || []).filter(v => v.active !== false),
     [product.variants]
   );
   
-  // 🔥 THE FIX: Check if variants actually have attributes (like Size or Color)
+  
   const hasRealVariants = useMemo(() => {
     return activeVariants.some(v => v.attributes && Object.keys(v.attributes).length > 0);
   }, [activeVariants]);
@@ -105,7 +105,7 @@ const ProductInfo = ({ product }) => {
   const displayPrice = activeVariant ? activeVariant.price : (product.minPrice || product.price || product.basePrice || 0);
   const displayComparePrice = activeVariant ? activeVariant.compareAtPrice : product.originalPrice;
   
-  // 🔥 THE FIX: Because activeVariant now safely grabs the default item, this reads perfectly!
+  
   const currentStock = activeVariant ? (activeVariant.stockQuantity || 0) : (product.totalStock || product.stockQuantity || 0);
   const onSale = activeVariant?.activeCampaignId || product.activeCampaignId;
 
@@ -119,7 +119,7 @@ const ProductInfo = ({ product }) => {
   }, [currentStock]);
 
   const handleAddToCart = async () => {
-    // If it's a simple product, activeVariant.id will correctly grab the hidden default variant ID!
+    
     const variantId = activeVariant?.id || product.id;
 
     if (!variantId) {

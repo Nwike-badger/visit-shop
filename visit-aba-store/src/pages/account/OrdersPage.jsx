@@ -45,20 +45,18 @@ const OrdersPage = () => {
 
     const fetchOrders = async () => {
       try {
-        // Fetch all pages — size=100 covers most users comfortably
+        
         const res = await api.get('/v1/orders/my-orders?page=0&size=100');
         const content = res.data.content || [];
 
-        // Client-side sort: orders with a date first (newest first),
-        // then orders with no date at the bottom.
-        // This is a safety net for existing null-date orders in the DB.
+       
         const sorted = [...content].sort((a, b) => {
           const da = parseSpringDate(a.createdAt);
           const db = parseSpringDate(b.createdAt);
           if (!da && !db) return 0;
-          if (!da) return 1;   // null dates sink to bottom
+          if (!da) return 1;  
           if (!db) return -1;
-          return db - da;      // newest first
+          return db - da;      
         });
 
         setOrders(sorted);
@@ -94,8 +92,7 @@ const OrdersPage = () => {
     </div>
   );
 
-  // Only show non-pending orders that have been paid, plus the most recent pending one
-  // This prevents the list from being cluttered with abandoned test checkouts
+  
   const paidOrders    = orders.filter(o => o.orderStatus !== 'PENDING_PAYMENT');
   const pendingOrders = orders.filter(o => o.orderStatus === 'PENDING_PAYMENT');
   const displayOrders = [...paidOrders, ...pendingOrders];

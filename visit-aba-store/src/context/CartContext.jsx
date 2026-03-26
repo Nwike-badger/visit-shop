@@ -36,10 +36,7 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  /**
-   * ✅ NEW: Cart.jsx destructures this but it never existed — silently breaking
-   * the +/- quantity buttons on the cart page.
-   */
+  
   const updateQuantity = async (variantId, newQuantity) => {
     if (newQuantity < 1) return removeFromCart(variantId);
     try {

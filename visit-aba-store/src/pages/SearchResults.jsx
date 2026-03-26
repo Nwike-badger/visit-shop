@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import api from '../api/axiosConfig';
 import ProductGrid from '../components/product/ProductGrid';
-import { SearchX, ArrowLeft } from 'lucide-react';
+import { SearchX, ArrowLeft, Search } from 'lucide-react';
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
@@ -21,8 +21,6 @@ const SearchResults = () => {
 
       setLoading(true);
       try {
-        // 🔥 FIX: We pass the query as an object so Axios automatically URL-encodes it.
-        // This prevents crashes when users search for multiple words (like "air max")
         const response = await api.get('/products/search', {
             params: { q: query }
         });
@@ -37,58 +35,60 @@ const SearchResults = () => {
     fetchResults();
   }, [query]); 
 
-  // Match the loading state of the Home Page
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="animate-pulse flex flex-col items-center">
-        <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <div className="text-gray-400 font-medium">Searching for "{query}"...</div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50/30">
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">
+           Searching for "{query}"...
+        </p>
       </div>
     </div>
   );
 
   return (
-    <div className="bg-gray-50 min-h-screen pb-20 font-sans">
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="bg-gray-50/30 min-h-screen pb-20 font-sans">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
         
         {/* Header Section */}
-        <div className="mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-blue-600 mb-4 transition-colors">
-            <ArrowLeft size={16} /> Back to Home
+        <div className="mb-8 lg:mb-12">
+          <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-900 uppercase tracking-widest mb-4 transition-colors">
+            <ArrowLeft size={14} /> Back to Store
           </Link>
-          <h1 className="text-3xl font-black text-gray-900">
-            Search Results for <span className="text-blue-600">"{query}"</span>
-          </h1>
-          <p className="text-gray-500 mt-2 font-medium">
-            Found {products.length} {products.length === 1 ? 'item' : 'items'}
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div>
+                  <h1 className="text-3xl lg:text-4xl font-black text-gray-900 tracking-tight">
+                    Results for <span className="text-blue-600 px-1">"{query}"</span>
+                  </h1>
+                  <p className="text-gray-500 mt-2 font-medium">
+                    Found {products.length} {products.length === 1 ? 'item' : 'items'} in our catalog
+                  </p>
+              </div>
+          </div>
         </div>
 
         {/* Results Content */}
         {products.length === 0 ? (
-          
-          /* EMPTY STATE (Beautiful Error Handling) */
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 flex flex-col items-center justify-center text-center">
-            <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 mb-6">
-              <SearchX size={48} />
+          /* EMPTY STATE */
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 sm:p-20 flex flex-col items-center justify-center text-center">
+            <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 mb-6 border border-gray-100">
+              <SearchX size={40} />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">No results found</h2>
-            <p className="text-gray-500 max-w-md mx-auto mb-8">
-              We couldn't find anything matching "{query}". Try checking your spelling or using more general terms.
+            <h2 className="text-2xl font-black text-gray-900 mb-3 tracking-tight">No results found</h2>
+            <p className="text-gray-500 max-w-md mx-auto mb-10 font-medium">
+              We couldn't find any items matching <span className="text-gray-900 font-bold">"{query}"</span>. Try using more general keywords or checking your spelling.
             </p>
-            <Link to="/" className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-black transition-all shadow-lg">
-              Continue Shopping
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-4">
+                <Link to="/products" className="bg-gray-900 text-white px-8 py-4 rounded-xl font-bold hover:bg-black transition-all shadow-lg flex items-center justify-center gap-2">
+                  <Search size={18} /> Browse All Products
+                </Link>
+            </div>
           </div>
-
         ) : (
-          
-          /* SUCCESS STATE (Using our standard Product Grid!) */
-          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100">
-             {/* By using ProductGrid, we automatically inherit the "Jumia Style" stock bars, discounts, and hover effects! */}
+          /* SUCCESS STATE */
+          <div className="bg-white p-6 sm:p-8 lg:p-10 rounded-3xl shadow-sm border border-gray-100">
              <ProductGrid products={products} columns={5} gap="normal" />
           </div>
-
         )}
         
       </div>

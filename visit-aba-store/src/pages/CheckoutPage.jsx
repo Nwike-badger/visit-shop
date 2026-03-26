@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/axiosConfig';
 import { toast } from 'react-hot-toast';
 import { GoogleLogin } from '@react-oauth/google';
-import { MapPin, ShieldCheck, CreditCard, ShoppingCart, UserCheck, Loader2 } from 'lucide-react';
+import { MapPin, ShieldCheck, CreditCard, ShoppingBag, UserCheck, Loader2, Lock, ArrowLeft } from 'lucide-react';
 import AddressForm from '../components/AddressForm';
 
 const CheckoutPage = () => {
@@ -52,7 +52,7 @@ const CheckoutPage = () => {
       if (authMode === 'login') {
         const res = await api.post('/v1/auth/login', { username: authForm.email, password: authForm.password, guestId });
         await login(res.data.accessToken);
-        toast.success("Logged in! Let's complete your order.");
+        toast.success("Welcome back! Let's complete your order.");
       } else {
         await api.post('/v1/auth/register', authForm);
         const res = await api.post('/v1/auth/login', { username: authForm.email, password: authForm.password, guestId });
@@ -69,85 +69,58 @@ const CheckoutPage = () => {
   };
 
   const handlePlaceOrder = async (e) => {
-  e.preventDefault();
-  setLoading(true);
+    e.preventDefault();
+    setLoading(true);
 
-  // ── Guard: catch stale cart items before hitting the backend ──────────────
-  // If any cart item has no variantId, the order will 409 immediately.
-  // This catches the "seeder restarted and recreated IDs" case early
-  // with a clear user-facing message.
-  const invalidItems = cartItems.filter(item => !item.variantId);
-  if (invalidItems.length > 0) {
-    toast.error(
-      'Some items in your cart are no longer available. Please remove them and re-add the products.',
-      { duration: 6000 }
-    );
-    setLoading(false);
-    return;
-  }
-
-  const orderRequest = {
-    items: cartItems.map(item => ({ variantId: item.variantId, quantity: item.quantity })),
-    shippingAddress: address,
-    billingAddress: address,
-    paymentMethod: 'MONNIFY',
-  };
-
-  try {
-    console.log('[Checkout] Step 1: Creating order...');
-    const orderRes = await api.post('/v1/orders', orderRequest);
-    const order = orderRes.data;
-    console.log('[Checkout] Step 1 done. orderId =', order.orderId, '| orderNumber =', order.orderNumber);
-
-    if (!order?.orderId) {
-      throw new Error(`Order was created but no orderId returned. Response: ${JSON.stringify(order)}`);
+    const invalidItems = cartItems.filter(item => !item.variantId);
+    if (invalidItems.length > 0) {
+      toast.error(
+        'Some items in your cart are no longer available. Please remove them and re-add the products.',
+        { duration: 6000 }
+      );
+      setLoading(false);
+      return;
     }
 
-    console.log('[Checkout] Step 2: Initializing payment for orderId =', order.orderId);
-    const paymentRes = await api.post(`/v1/payments/init/${order.orderId}`);
-    console.log('[Checkout] Step 2 done. checkoutUrl =', paymentRes.data?.checkoutUrl);
+    const orderRequest = {
+      items: cartItems.map(item => ({ variantId: item.variantId, quantity: item.quantity })),
+      shippingAddress: address,
+      billingAddress: address,
+      paymentMethod: 'MONNIFY',
+    };
 
-    const checkoutUrl = paymentRes.data?.checkoutUrl;
-    if (!checkoutUrl) {
-      throw new Error(`No checkout URL returned. Response: ${JSON.stringify(paymentRes.data)}`);
-    }
+    try {
+      const orderRes = await api.post('/v1/orders', orderRequest);
+      const order = orderRes.data;
 
-    console.log('[Checkout] Step 3: Redirecting to Monnify...');
-    window.location.href = checkoutUrl;
-
-  } catch (error) {
-    // ── Specific handling for known 409 causes ────────────────────────────
-    if (error.response?.status === 409) {
-      const serverMessage = error.response?.data?.message || '';
-
-      if (serverMessage.includes('variant') || serverMessage.includes('not found')) {
-        // Stale cart — IDs changed after server restart or product deletion
-        toast.error(
-          'Some items in your cart are outdated. Please go back to the cart, remove all items, and re-add them.',
-          { duration: 8000 }
-        );
-      } else {
-        // Other conflict (e.g. out of stock discovered at order time)
-        toast.error(serverMessage || 'Could not place order. Please check your cart.');
+      if (!order?.orderId) {
+        throw new Error(`Order was created but no orderId returned.`);
       }
-    } else {
-      const message =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to initialize checkout. Please try again.';
-      toast.error(message);
+
+      const paymentRes = await api.post(`/v1/payments/init/${order.orderId}`);
+      const checkoutUrl = paymentRes.data?.checkoutUrl;
+      
+      if (!checkoutUrl) {
+        throw new Error(`No checkout URL returned.`);
+      }
+
+      window.location.href = checkoutUrl;
+
+    } catch (error) {
+      if (error.response?.status === 409) {
+        const serverMessage = error.response?.data?.message || '';
+        if (serverMessage.includes('variant') || serverMessage.includes('not found')) {
+          toast.error('Some items in your cart are outdated. Please go back, remove them, and re-add.', { duration: 8000 });
+        } else {
+          toast.error(serverMessage || 'Could not place order. Please check your cart.');
+        }
+      } else {
+        const message = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to initialize checkout.';
+        toast.error(message);
+      }
+      setLoading(false);
     }
-
-    console.error('[Checkout] FAILED:', {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message,
-    });
-
-    setLoading(false);
-  }
-};
+  };
 
   const isAddressValid = hasSavedAddress || (
     address.streetAddress?.trim() &&
@@ -156,99 +129,150 @@ const CheckoutPage = () => {
     address.phoneNumber?.trim()
   );
 
+  // ── 1. Empty State ──────────────────────────────────────────────────────────
   if (cartItems.length === 0) return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center text-center">
-      <ShoppingCart size={48} className="text-gray-300 mb-4" />
-      <h2 className="text-2xl font-bold text-gray-900">Your cart is empty</h2>
-      <button onClick={() => navigate('/')} className="mt-4 text-blue-600 font-bold hover:underline">
-        Continue Shopping
-      </button>
+    <div className="bg-gray-50/30 min-h-screen flex flex-col items-center justify-center text-center px-4 font-sans">
+      <div className="bg-white p-12 sm:p-20 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center max-w-lg w-full">
+        <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-6 border border-gray-100">
+          <ShoppingBag size={40} />
+        </div>
+        <h2 className="text-2xl font-black text-gray-900 mb-3 tracking-tight">Your cart is empty</h2>
+        <p className="text-gray-500 font-medium mb-8">You need items in your cart to proceed to checkout.</p>
+        <button onClick={() => navigate('/')} className="w-full bg-gray-900 text-white px-8 py-4 rounded-xl font-bold hover:bg-black transition-all shadow-lg">
+          Return to Store
+        </button>
+      </div>
     </div>
   );
 
+  // ── 2. Loading State ────────────────────────────────────────────────────────
   if (authLoading) return (
-    <div className="p-20 text-center animate-pulse">Securing checkout...</div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50/30">
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Securing Checkout...</p>
+      </div>
+    </div>
   );
 
+  // ── 3. Main Checkout View ───────────────────────────────────────────────────
   return (
-    <div className="bg-gray-50 min-h-screen pb-20 font-sans">
-      <div className="max-w-7xl mx-auto px-4 lg:px-8 py-10">
+    <main className="bg-gray-50/30 min-h-screen pb-24 font-sans selection:bg-gray-100">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
 
-        <div className="flex items-center gap-3 mb-8 border-b border-gray-200 pb-4">
-          <ShieldCheck size={32} className="text-green-600" />
-          <h1 className="text-3xl font-black text-gray-900">Secure Checkout</h1>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 lg:mb-10 border-b border-gray-100 pb-6">
+          <div>
+            <Link to="/cart" className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-900 uppercase tracking-widest mb-4 transition-colors">
+              <ArrowLeft size={14} /> Back to Cart
+            </Link>
+            <h1 className="text-3xl lg:text-4xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+               Secure Checkout <Lock size={28} className="text-gray-300" />
+            </h1>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
 
-          {/* ── Left: Auth + Address ──────────────────────────────────────── */}
-          <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+          {/* ── LEFT COLUMN: Auth & Address ─────────────────────────────────── */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-8">
+            
             {!isAuthenticated ? (
-              <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100">
-                <div className="mb-6 border-b border-gray-100 pb-4">
-                  <h2 className="text-xl font-bold text-gray-900">Account Details</h2>
-                  <p className="text-sm text-gray-500 mt-1">Sign in or create an account to secure your order.</p>
+              /* Auth Block */
+              <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-sm border border-gray-100">
+                <div className="mb-8 border-b border-gray-100 pb-6">
+                  <h2 className="text-2xl font-black text-gray-900 tracking-tight">Account Details</h2>
+                  <p className="text-sm font-medium text-gray-500 mt-1">Sign in or create an account to secure your order.</p>
                 </div>
-                <div className="mb-6 flex justify-center max-w-md">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => toast.error('Google login failed')}
-                    useOneTap shape="rectangular" size="large" text="continue_with" width="100%"
-                  />
-                </div>
-                <div className="relative flex items-center mb-6 max-w-md">
-                  <div className="flex-grow border-t border-gray-200" />
-                  <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase tracking-wider">OR USE EMAIL</span>
-                  <div className="flex-grow border-t border-gray-200" />
-                </div>
-                <div className="flex bg-gray-100 p-1 rounded-lg mb-6 max-w-md">
-                  <button onClick={() => setAuthMode('login')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${authMode === 'login' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Log In</button>
-                  <button onClick={() => setAuthMode('signup')} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${authMode === 'signup' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Sign Up</button>
-                </div>
-                <form onSubmit={handleInlineAuth} className="space-y-4 max-w-md">
-                  {authMode === 'signup' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">First Name</label>
-                        <input required name="firstName" onChange={handleAuthChange} disabled={loading} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-100 outline-none" />
+                
+                <div className="max-w-md">
+                  <div className="mb-8">
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => toast.error('Google login failed')}
+                      useOneTap shape="rectangular" size="large" text="continue_with" width="100%"
+                    />
+                  </div>
+                  
+                  <div className="relative flex items-center mb-8">
+                    <div className="flex-grow border-t border-gray-100" />
+                    <span className="flex-shrink-0 mx-4 text-gray-400 text-[10px] font-black uppercase tracking-widest">OR CONTINUE WITH EMAIL</span>
+                    <div className="flex-grow border-t border-gray-100" />
+                  </div>
+                  
+                  {/* Custom Toggle Switch */}
+                  <div className="flex bg-gray-100 p-1.5 rounded-xl mb-8">
+                    <button 
+                      type="button"
+                      onClick={() => setAuthMode('login')} 
+                      className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${authMode === 'login' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      Log In
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setAuthMode('signup')} 
+                      className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${authMode === 'signup' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      Create Account
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleInlineAuth} className="space-y-5">
+                    {authMode === 'signup' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-sm font-bold text-gray-900 mb-1.5">First Name</label>
+                          <input required name="firstName" onChange={handleAuthChange} disabled={loading} className="w-full p-3.5 border border-gray-300 rounded-xl outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-50 transition-all font-medium text-gray-900" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-gray-900 mb-1.5">Last Name</label>
+                          <input required name="lastName" onChange={handleAuthChange} disabled={loading} className="w-full p-3.5 border border-gray-300 rounded-xl outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-50 transition-all font-medium text-gray-900" />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Last Name</label>
-                        <input required name="lastName" onChange={handleAuthChange} disabled={loading} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-100 outline-none" />
-                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-1.5">Email Address</label>
+                      <input required type="email" name="email" onChange={handleAuthChange} disabled={loading} className="w-full p-3.5 border border-gray-300 rounded-xl outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-50 transition-all font-medium text-gray-900" />
                     </div>
-                  )}
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
-                    <input required type="email" name="email" onChange={handleAuthChange} disabled={loading} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-100 outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Password</label>
-                    <input required type="password" name="password" minLength={6} onChange={handleAuthChange} disabled={loading} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-100 outline-none" />
-                  </div>
-                  <button disabled={loading} className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold mt-2 hover:bg-black transition-all disabled:opacity-50">
-                    {loading ? 'Processing...' : authMode === 'login' ? 'Continue to Shipping' : 'Create Account & Continue'}
-                  </button>
-                </form>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-1.5">Password</label>
+                      <input required type="password" name="password" minLength={6} onChange={handleAuthChange} disabled={loading} className="w-full p-3.5 border border-gray-300 rounded-xl outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-50 transition-all font-medium text-gray-900" />
+                    </div>
+                    
+                    <button disabled={loading} className="w-full bg-gray-900 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest mt-4 hover:bg-black transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                      {loading ? 'Authenticating...' : authMode === 'login' ? 'Log In to Continue' : 'Create Account & Continue'}
+                    </button>
+                  </form>
+                </div>
               </div>
             ) : (
-              <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100">
-                <div className="flex items-center gap-3 bg-green-50 text-green-800 p-4 rounded-xl mb-8 border border-green-100">
-                  <UserCheck size={20} className="text-green-600" />
-                  <span className="text-sm font-medium">Logged in as <span className="font-bold">{user?.email}</span></span>
+              /* Address Block */
+              <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-sm border border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b border-gray-100 pb-6">
+                  <div>
+                    <h2 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
+                       Delivery Address
+                    </h2>
+                    <div className="flex items-center gap-2 mt-2 text-sm text-gray-500 font-medium">
+                      <UserCheck size={16} className="text-green-500" /> Logged in as <span className="text-gray-900 font-bold">{user?.email}</span>
+                    </div>
+                  </div>
                 </div>
-                <h2 className="text-xl font-bold mb-6 flex items-center gap-2 border-b border-gray-100 pb-4">
-                  <MapPin className="text-blue-600" size={24} /> Delivery Address
-                </h2>
+
                 {hasSavedAddress ? (
-                  <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl relative">
-                    <span className="absolute top-4 right-4 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase">Default</span>
-                    <p className="font-bold text-gray-900 mb-2">Delivering to:</p>
-                    <p className="text-gray-700 text-sm font-medium mb-1">{address.phoneNumber}</p>
-                    <p className="text-gray-700">{address.streetAddress}</p>
-                    <p className="text-gray-700">{address.city}, {address.state}</p>
-                    <button type="button" onClick={() => setHasSavedAddress(false)} className="mt-5 text-sm font-bold text-gray-500 hover:text-gray-900 border border-gray-300 px-4 py-2 rounded-lg bg-white">
-                      Change delivery address
+                  <div className="bg-gray-50 p-6 sm:p-8 rounded-2xl border border-gray-100 relative group">
+                    <div className="absolute top-6 right-6 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-blue-600">
+                       <MapPin size={18} />
+                    </div>
+                    <p className="font-black text-gray-900 text-lg mb-2">Delivery Destination</p>
+                    <div className="space-y-1 text-gray-600 font-medium mb-6">
+                      <p className="text-gray-900 font-bold">{address.phoneNumber}</p>
+                      <p className="pt-2">{address.streetAddress}</p>
+                      <p>{address.city}, {address.state}</p>
+                    </div>
+                    <button type="button" onClick={() => setHasSavedAddress(false)} className="text-sm font-bold text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 px-5 py-2.5 rounded-xl transition-colors shadow-sm">
+                      Use a different address
                     </button>
                   </div>
                 ) : (
@@ -258,64 +282,75 @@ const CheckoutPage = () => {
             )}
           </div>
 
-          {/* ── Right: Order Summary ──────────────────────────────────────── */}
+          {/* ── RIGHT COLUMN: Order Summary ─────────────────────────────────── */}
           <div className="lg:col-span-5 xl:col-span-4">
-            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-100 sticky top-24">
-              <h2 className="text-xl font-bold mb-6 border-b border-gray-100 pb-4">Order Summary</h2>
-              <div className="space-y-4 mb-6 max-h-60 overflow-y-auto pr-2">
+            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-lg border border-gray-100 sticky top-28">
+              <h2 className="text-xl font-black text-gray-900 mb-6 tracking-tight border-b border-gray-100 pb-4">Order Summary</h2>
+              
+              {/* Receipt Items */}
+              <div className="space-y-5 mb-6 max-h-[35vh] overflow-y-auto pr-2 custom-scrollbar">
                 {cartItems.map((item, index) => (
                   <div key={`${item.variantId}-${index}`} className="flex justify-between items-start gap-4">
                     <div className="flex-1">
-                      <p className="text-sm font-bold text-gray-900 leading-tight">{item.productName}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Qty: {item.quantity}</p>
+                      <p className="text-sm font-bold text-gray-900 leading-tight line-clamp-2">{item.productName}</p>
+                      <p className="text-xs font-medium text-gray-500 mt-1">Qty: {item.quantity}</p>
                     </div>
-                    <span className="font-bold text-gray-900 whitespace-nowrap">
+                    <span className="font-black text-gray-900 whitespace-nowrap">
                       ₦{Number(item.subTotal ?? 0).toLocaleString()}
                     </span>
                   </div>
                 ))}
               </div>
-              <div className="space-y-3 border-t border-gray-100 pt-4 mb-6 text-sm text-gray-600">
-                <div className="flex justify-between">
+              
+              {/* Receipt Totals */}
+              <div className="space-y-4 border-t border-gray-100 pt-6 mb-6 text-sm font-medium text-gray-600">
+                <div className="flex justify-between items-center">
                   <span>Subtotal</span>
-                  <span>₦{cartTotal.toLocaleString()}</span>
+                  <span className="font-bold text-gray-900">₦{cartTotal.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span>Delivery Fee</span>
-                  <span className="text-green-600 font-bold">Free</span>
+                  <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs font-black uppercase tracking-widest">Free</span>
                 </div>
               </div>
-              <div className="border-t border-gray-900 pt-4 mb-8 flex justify-between items-end">
-                <span className="text-gray-900 font-bold">Total to Pay</span>
-                <span className="text-3xl font-black text-blue-600">₦{cartTotal.toLocaleString()}</span>
+              
+              <div className="border-t border-gray-900 pt-6 mb-8 flex justify-between items-end">
+                <span className="text-gray-900 font-bold uppercase tracking-widest text-sm">Total to Pay</span>
+                <span className="text-3xl font-black text-gray-900 tracking-tight">₦{cartTotal.toLocaleString()}</span>
               </div>
+              
+              {/* The Grand Conversion Button */}
               <button
                 type="button"
                 onClick={handlePlaceOrder}
                 disabled={loading || !isAuthenticated || !isAddressValid}
-                className={`w-full py-4 rounded-xl font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2
-                  ${loading || !isAuthenticated || !isAddressValid
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                    : 'bg-green-600 hover:bg-green-700 shadow-green-200 hover:-translate-y-1'}
+                className={`w-full py-4 rounded-xl font-black text-sm uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-2
+                  ${(loading || !isAuthenticated || !isAddressValid)
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 hover:-translate-y-0.5'}
                 `}
               >
                 {loading ? (
-                  <><Loader2 size={20} className="animate-spin" /> Redirecting to payment...</>
+                  <><Loader2 size={18} className="animate-spin" /> Processing...</>
                 ) : !isAuthenticated ? (
                   'Sign In to Proceed'
+                ) : !isAddressValid ? (
+                  'Complete Address'
                 ) : (
-                  <><CreditCard size={20} /> Pay Securely via Monnify</>
+                  <><CreditCard size={18} /> Pay Securely</>
                 )}
               </button>
-              <div className="flex items-center justify-center gap-2 mt-4 text-xs text-gray-500">
-                <ShieldCheck size={14} /> Encrypted & Secure Checkout
+              
+              {/* Trust Badges */}
+              <div className="mt-6 flex flex-col items-center justify-center gap-2 text-xs font-bold text-gray-400">
+                 <div className="flex items-center gap-1.5"><ShieldCheck size={16} className="text-green-500" /> 100% Encrypted Payment via Monnify</div>
               </div>
             </div>
           </div>
 
         </div>
       </div>
-    </div>
+    </main>
   );
 };
 

@@ -6,12 +6,13 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL, 
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true'
   },
 });
 
 // Request Interceptor
 api.interceptors.request.use((config) => {
-  // 🔥 FIX: Safely check for both common token names
+  
   const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
   
   if (token) {
