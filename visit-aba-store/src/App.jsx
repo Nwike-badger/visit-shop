@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "./context/CartContext";
 import Navbar from "./components/navbar/Navbar";
 import Home from "./pages/Home";
+import Catalog from "./pages/Catalog"; // 👈 NEW: Import your Catalog page
 import Cart from "./pages/Cart";
 import ProductPage from "./pages/product/ProductPage"; 
 import CheckoutPage from "./pages/CheckoutPage";
@@ -15,7 +16,6 @@ import OrdersPage from "./pages/account/OrdersPage";
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import OrderDetailPage from "./pages/account/OrderDetailPage";
 
-
 import PaymentCallback from "./pages/PaymentCallback";
 
 // --- ROUTE PROTECTION & LAYOUTS ---
@@ -25,9 +25,6 @@ import AdminLayout from "./components/admin/AdminLayout";
 // --- ADMIN PAGES ---
 import AdminProducts from "./pages/admin/AdminProducts/Index";
 import AdminCampaigns from "./pages/admin/AdminCampaigns";
-
-
-
 
 function App() {
   const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -46,6 +43,7 @@ function App() {
                 <Routes>
                   {/* --- PUBLIC ROUTES --- */}
                   <Route path="/" element={<Home />} />
+                  <Route path="/products" element={<Catalog />} /> {/* 👈 NEW: Route for the View All link */}
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/product/:id" element={<ProductPage />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
@@ -53,10 +51,8 @@ function App() {
                   <Route path="/signup" element={<SignupPage />} />
                   <Route path="/search" element={<SearchResults />} />
                   
-                  
                   <Route path="/payment/callback" element={<PaymentCallback />} />
 
-                  
                   <Route element={<ProtectedRoute />}>
                       <Route path="/account" element={<AccountPage />} />
                       <Route path="/orders" element={<OrdersPage />} />
