@@ -157,7 +157,7 @@ const Home = () => {
             </ProductSection>
             <div className="mt-6 sm:mt-10 text-center">
               <Link to="/products" className="inline-flex items-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3 border-2 border-gray-900 text-gray-900 text-xs sm:text-sm font-black uppercase tracking-widest rounded-xl hover:bg-gray-900 hover:text-white transition-all">
-                View All Catalog <ArrowRight size={14} className="sm:w-4 sm:h-4" />
+                View All<ArrowRight size={14} className="sm:w-4 sm:h-4" />
               </Link>
             </div>
           </div>

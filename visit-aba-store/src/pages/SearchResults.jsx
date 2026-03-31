@@ -1,39 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import api from '../api/axiosConfig';
 import ProductGrid from '../components/product/ProductGrid';
 import { SearchX, ArrowLeft, Search } from 'lucide-react';
+import { useSmartSearch } from '../hooks/useSmartSearch'; // Adjust import path as needed
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || ''; 
   
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchResults = async () => {
-      if (!query.trim()) {
-        setProducts([]);
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const response = await api.get('/products/search', {
-            params: { q: query }
-        });
-        setProducts(response.data);
-      } catch (error) {
-        console.error("Search failed:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchResults();
-  }, [query]); 
+  // 🔥 Look how clean this is! The hook handles the API call, loading state, 
+  // debouncing, and the background behavior tracking automatically.
+  const { results: products, loading, total } = useSmartSearch({ query });
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50/30">
@@ -61,7 +38,7 @@ const SearchResults = () => {
                     Results for <span className="text-blue-600 px-1">"{query}"</span>
                   </h1>
                   <p className="text-gray-500 mt-2 font-medium">
-                    Found {products.length} {products.length === 1 ? 'item' : 'items'} in our catalog
+                    Found {total} {total === 1 ? 'item' : 'items'} in our catalog
                   </p>
               </div>
           </div>
