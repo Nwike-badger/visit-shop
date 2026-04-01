@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { useWishlist } from '../../context/WishlistContext'; // 👈 NEW
 import {
   Search, ShoppingCart, User, Menu, X, HelpCircle,
   Phone, LogOut, AlertCircle, CheckCircle, ShieldCheck,
-  ChevronRight, Grid3X3,
+  ChevronRight, Grid3X3, Heart // 👈 NEW: Imported Heart
 } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
 import CategoryMenu from '../navbar/CategoryMenu';
@@ -27,6 +28,7 @@ const checkAdminFromToken = () => {
 
 const Navbar = () => {
   const { cartCount, cartTotal } = useCart();
+  const { wishlistCount } = useWishlist(); // 👈 NEW: Get wishlist count
   const { categories, loading: categoriesLoading } = useCategories();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
@@ -54,7 +56,6 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Body scroll lock — only for mobile drawer (sheet manages its own)
   useEffect(() => {
     if (!isCategorySheetOpen) {
       document.body.style.overflow = isMobileMenuOpen ? 'hidden' : 'unset';
@@ -74,14 +75,12 @@ const Navbar = () => {
   const handleLogout = () => { logout(); navigate('/'); };
 
   const openCategorySheet = () => {
-    setIsMobileMenuOpen(false); // Close drawer first
-    // Small delay so drawer close animation plays first
+    setIsMobileMenuOpen(false); 
     setTimeout(() => setIsCategorySheetOpen(true), 250);
   };
 
   return (
     <>
-      {/* ─── ANNOUNCEMENT BANNER ─────────────────────────────────────────── */}
       <div className="bg-gray-900 text-white text-[11px] font-bold py-2 tracking-wide border-b border-gray-800">
         <div className="max-w-[1440px] mx-auto px-4 flex justify-between items-center">
           <span className="hidden sm:inline opacity-80">Welcome to Nigeria's Premium Store</span>
@@ -95,16 +94,13 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* ─── MAIN NAVBAR ─────────────────────────────────────────────────── */}
       <nav className={`sticky top-0 z-40 transition-all duration-300 border-b border-gray-100 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-sm' : 'bg-white'}`}>
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4 lg:gap-8">
 
-          {/* LEFT: Hamburger + Logo */}
           <div className="flex items-center gap-3 shrink-0">
             <button
               className="lg:hidden p-2 -ml-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-full active:scale-95 transition-all"
               onClick={() => setIsMobileMenuOpen(true)}
-              aria-label="Open menu"
             >
               <Menu size={24} />
             </button>
@@ -123,7 +119,6 @@ const Navbar = () => {
             </Link>
           </div>
 
-          {/* CENTER: Desktop categories + search */}
           <div className="hidden lg:flex flex-1 items-center gap-6 max-w-4xl mx-auto">
             <div className="shrink-0 relative z-50">
               {categoriesLoading ? (
@@ -152,25 +147,20 @@ const Navbar = () => {
             </form>
           </div>
 
-          {/* RIGHT: Actions */}
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
 
-            {/* Mobile: Search toggle */}
             <button
               className="lg:hidden p-2 text-gray-600 hover:bg-green-50 rounded-full active:scale-95 transition-all"
               onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
-              aria-label="Toggle search"
             >
               <Search size={22} />
             </button>
 
-            {/* Desktop: Help */}
             <Link to="/support" className="hidden xl:flex flex-col items-center gap-0.5 text-gray-500 hover:text-green-600 transition-colors group">
               <HelpCircle size={20} className="group-hover:scale-110 transition-transform" />
               <span className="text-[10px] font-bold">Help</span>
             </Link>
 
-            {/* Desktop: Account dropdown */}
             <div className="hidden lg:block relative z-50" onMouseEnter={() => setIsAccountOpen(true)} onMouseLeave={() => setIsAccountOpen(false)}>
               <Link
                 to={isAuthenticated ? '/account' : '/login'}
@@ -188,7 +178,6 @@ const Navbar = () => {
                 </span>
               </Link>
 
-              {/* Account dropdown */}
               <div className={`absolute right-0 top-full pt-4 w-64 transition-all duration-200 ${isAccountOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible translate-y-2'}`}>
                 <div className="bg-white border border-gray-100 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.12)] rounded-2xl overflow-hidden">
                   {isAuthenticated ? (
@@ -226,7 +215,6 @@ const Navbar = () => {
                       </Link>
                     )}
                     <Link to="/orders" className="block px-5 py-2.5 text-sm text-gray-600 hover:bg-green-50 hover:text-green-700 font-medium transition-colors">📦 My Orders</Link>
-                    <Link to="/wishlist" className="block px-5 py-2.5 text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors">❤️ Saved Items</Link>
                   </div>
 
                   {isAuthenticated && (
@@ -240,6 +228,19 @@ const Navbar = () => {
               </div>
             </div>
 
+            {/* 👈 NEW: Wishlist Icon (Always visible next to cart) */}
+            <Link
+              to="/wishlist"
+              className="flex items-center justify-center w-10 h-10 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:border-red-200 hover:text-red-500 rounded-full transition-all group ml-1 shadow-sm relative"
+            >
+              <Heart size={18} className="text-gray-600 group-hover:text-red-500 transition-colors" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white">
+                  {wishlistCount > 99 ? '99+' : wishlistCount}
+                </span>
+              )}
+            </Link>
+
             {/* Cart — always visible */}
             <Link
               to="/cart"
@@ -248,7 +249,7 @@ const Navbar = () => {
               <div className="relative">
                 <ShoppingCart size={18} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white group-hover:border-green-600 transition-colors">
+                  <span className="absolute -top-2 -right-2 bg-green-600 text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white group-hover:border-green-600 transition-colors">
                     {cartCount > 99 ? '99+' : cartCount}
                   </span>
                 )}
@@ -258,7 +259,6 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Mobile Search Panel */}
         <div className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${isMobileSearchOpen ? 'max-h-20 border-t border-gray-100' : 'max-h-0'}`}>
           <div className="p-3 bg-gray-50">
             <form onSubmit={handleSearch} className="relative">
@@ -287,7 +287,6 @@ const Navbar = () => {
       <div
         className={`fixed inset-y-0 left-0 w-[85vw] max-w-sm bg-white z-50 lg:hidden shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50 shrink-0">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-green-700 text-white shadow-sm">
@@ -301,15 +300,13 @@ const Navbar = () => {
               <span className="text-emerald-500">.</span>
             </div>
           </div>
-          <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" aria-label="Close menu">
+          <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors">
             <X size={20} />
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto py-4">
 
-          {/* Auth block */}
           <div className="px-4 mb-5">
             {isAuthenticated ? (
               <div className="bg-green-50 rounded-xl p-4 flex items-center gap-3 border border-green-100">
@@ -329,7 +326,6 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* ── BROWSE CATEGORIES — full-screen bottom sheet trigger ──── */}
           <div className="px-4 mb-4">
             <button
               onClick={openCategorySheet}
@@ -348,7 +344,6 @@ const Navbar = () => {
             </button>
           </div>
 
-          {/* My Account section */}
           <div className="px-2">
             <p className="px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 mt-2">My Account</p>
 
@@ -360,23 +355,25 @@ const Navbar = () => {
 
             {[
               { to: '/orders', icon: <ShoppingCart size={18} className="text-gray-400" />, label: 'My Orders' },
-              { to: '/wishlist', icon: <span>❤️</span>, label: 'Saved Items' },
+              { to: '/wishlist', icon: <Heart size={18} className="text-red-400" />, label: 'Saved Items', badge: wishlistCount }, // 👈 Updated icon and added badge
               { to: '/support', icon: <HelpCircle size={18} className="text-gray-400" />, label: 'Help & Support' },
-            ].map(({ to, icon, label }) => (
+            ].map(({ to, icon, label, badge }) => (
               <Link
                 key={to}
                 to={to}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="flex items-center justify-between px-4 py-3 mx-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
               >
-                <div className="flex items-center gap-3 font-medium">{icon} {label}</div>
+                <div className="flex items-center gap-3 font-medium">
+                  {icon} {label} 
+                  {badge > 0 && <span className="bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">{badge}</span>}
+                </div>
                 <ChevronRight size={16} className="text-gray-300" />
               </Link>
             ))}
           </div>
         </div>
 
-        {/* Footer: logout */}
         {isAuthenticated && (
           <div className="p-4 border-t border-gray-100 bg-gray-50 shrink-0">
             <button
@@ -389,7 +386,6 @@ const Navbar = () => {
         )}
       </div>
 
-      {/* ── MOBILE CATEGORY SHEET ─────────────────────────────────────── */}
       <MobileCategorySheet
         categories={categories}
         isOpen={isCategorySheetOpen}

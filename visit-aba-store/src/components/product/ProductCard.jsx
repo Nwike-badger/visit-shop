@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Loader2, Star, Heart } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext'; // 👈 1. Import the new context
 import { toast } from 'react-hot-toast';
 import api from '../../api/axiosConfig';
 
@@ -19,16 +20,25 @@ const getDisplayImages = (product) => {
 };
 
 const ProductCard = ({ product, isFlashSale }) => {
-  const navigate      = useNavigate();
+  const navigate = useNavigate();
   const { addToCart } = useCart();
-  const [isAdding, setIsAdding]     = useState(false);
-  const [wished,   setWished]       = useState(false);
-  const [imgError, setImgError]     = useState(false);
+  
+  // 👈 2. Pull exactly what we need from the Wishlist global state
+  const { isInWishlist, toggleWishlist } = useWishlist(); 
+
+  const [isAdding, setIsAdding] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  
+  // 👈 3. Replaced 'wished' with a loading state to prevent spam-clicking the API
+  const [isWishLoading, setIsWishLoading] = useState(false); 
 
   const productId = product.id;
   const price     = product.price || product.basePrice || 0;
   const stock     = product.stockQuantity !== undefined ? product.stockQuantity : (product.totalStock || 0);
   const isSoldOut = stock <= 0;
+
+  // 👈 4. Dynamically check if this specific product is in the global wishlist
+  const isWished = isInWishlist(productId); 
 
   const handleCartAction = async (e) => {
     e.preventDefault();
@@ -36,15 +46,19 @@ const ProductCard = ({ product, isFlashSale }) => {
     if (isSoldOut) { toast.error("This item is currently sold out."); return; }
     setIsAdding(true);
     try {
-      const response    = await api.get(`/products/${productId}`);
+      const response = await api.get(`/products/${productId}`);
       const fullProduct = response.data.product || response.data;
-      const hasOptions        = fullProduct.variantOptions && fullProduct.variantOptions.length > 0;
+      
+      const hasOptions = fullProduct.variantOptions && fullProduct.variantOptions.length > 0;
       const hasMultipleVariants = fullProduct.variants && fullProduct.variants.length > 1;
+      
       if (hasOptions || hasMultipleVariants) { navigate(`/product/${productId}`); return; }
+      
       let targetVariantId = productId;
       if (fullProduct.variants && fullProduct.variants.length === 1) {
         targetVariantId = fullProduct.variants[0].id;
       }
+      
       await addToCart(targetVariantId, 1);
     } catch {
       navigate(`/product/${productId}`);
@@ -53,10 +67,15 @@ const ProductCard = ({ product, isFlashSale }) => {
     }
   };
 
-  const handleWish = (e) => {
+  // 👈 5. Updated handler to call the backend via context
+  const handleWish = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setWished((p) => !p);
+    if (isWishLoading) return; // Prevent double-clicks
+    
+    setIsWishLoading(true);
+    await toggleWishlist(productId);
+    setIsWishLoading(false);
   };
 
   const { primary, secondary } = getDisplayImages(product);
@@ -82,7 +101,7 @@ const ProductCard = ({ product, isFlashSale }) => {
             ${isSoldOut ? 'grayscale opacity-50' : 'group-hover:scale-105'}`}
         />
 
-        {/* Secondary crossfade — desktop hover only */}
+        {/* Secondary crossfade */}
         {!isSoldOut && secondary && (
           <img
             src={secondary}
@@ -94,20 +113,27 @@ const ProductCard = ({ product, isFlashSale }) => {
           />
         )}
 
-        {/* Dark gradient — helps badges + button legibility */}
         <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
 
-        {/* ── WISHLIST pill (top-right) */}
+        {/* ── WISHLIST pill (top-right) ── */}
+        {/* 👈 6. UI updated to use 'isWished' and show a spinner if loading */}
         <button
           onClick={handleWish}
+          disabled={isWishLoading}
           aria-label="Save to wishlist"
           className={`absolute top-2 right-2 z-20 p-1.5 rounded-full backdrop-blur-md shadow-sm border transition-all
-            ${wished
+            ${isWished
               ? 'bg-red-500 border-red-500 text-white'
               : 'bg-white/70 border-white/50 text-gray-500 hover:bg-white hover:text-red-500'
-            }`}
+            }
+            ${isWishLoading ? 'opacity-70 cursor-wait' : ''}
+          `}
         >
-          <Heart size={13} fill={wished ? 'currentColor' : 'none'} />
+          {isWishLoading ? (
+             <Loader2 size={13} className="animate-spin text-current" />
+          ) : (
+             <Heart size={13} fill={isWished ? 'currentColor' : 'none'} />
+          )}
         </button>
 
         {/* ── BADGES (top-left) */}
@@ -132,13 +158,9 @@ const ProductCard = ({ product, isFlashSale }) => {
           )}
         </div>
 
-        {/* ── QUICK ADD
-              Desktop: slides up on hover (pointer device)
-              Mobile:  always visible as a compact icon pill at bottom
-        */}
+        {/* ── QUICK ADD ── */}
         {!isSoldOut && (
           <>
-            {/* Desktop hover button */}
             <div className="hidden sm:block absolute bottom-2.5 left-2.5 right-2.5
                             translate-y-3 opacity-0
                             group-hover:translate-y-0 group-hover:opacity-100
@@ -152,11 +174,10 @@ const ProductCard = ({ product, isFlashSale }) => {
                            hover:bg-green-600 hover:text-white hover:border-green-600
                            transition-all disabled:opacity-60"
               >
-                {isAdding ? <Loader2 size={14} className="animate-spin" /> : <><ShoppingCart size={14} /> Quick Add</>}
+                {isAdding ? <Loader2 size={14} className="animate-spin" /> : <><ShoppingCart size={14} /> Add to Cart</>}
               </button>
             </div>
 
-            {/* Mobile persistent icon button — bottom-right corner */}
             <button
               onClick={handleCartAction}
               disabled={isAdding}
@@ -177,23 +198,15 @@ const ProductCard = ({ product, isFlashSale }) => {
       </div>
 
       {/* ─── TEXT INFO ───────────────────────────────────────────────────── */}
-      {/*
-          Mobile: compact — p-2 with tighter text
-          Desktop: p-3/p-4 with standard sizing
-      */}
       <div className="flex flex-col flex-1 p-2 sm:p-3">
-
-        {/* Brand / category */}
         <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest truncate mb-0.5 sm:mb-1">
           {product.brandName || product.categoryName || "Premium"}
         </p>
 
-        {/* Product name */}
         <h3 className="text-gray-900 font-semibold text-[11px] sm:text-sm leading-snug mb-1.5 sm:mb-2 line-clamp-2 group-hover:text-green-700 transition-colors">
           {product.name}
         </h3>
 
-        {/* Price row */}
         <div className="mt-auto flex items-center flex-wrap gap-x-1.5 gap-y-0.5">
           <p className="text-gray-900 font-black text-sm sm:text-base tracking-tight">
             ₦{price.toLocaleString()}
@@ -205,7 +218,6 @@ const ProductCard = ({ product, isFlashSale }) => {
           )}
         </div>
 
-        {/* Rating — only if present */}
         {product.averageRating > 0 && (
           <div className="flex items-center gap-0.5 mt-1">
             <Star size={9} className="text-orange-400 fill-orange-400" />

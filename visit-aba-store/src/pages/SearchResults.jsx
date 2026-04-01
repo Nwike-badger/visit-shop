@@ -8,8 +8,7 @@ const SearchResults = () => {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || ''; 
   
-  // 🔥 Look how clean this is! The hook handles the API call, loading state, 
-  // debouncing, and the background behavior tracking automatically.
+  
   const { results: products, loading, total } = useSmartSearch({ query });
 
   if (loading) return (
