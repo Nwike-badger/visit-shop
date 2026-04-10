@@ -2,13 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../../api/axiosConfig';
 import { toast } from 'react-hot-toast';
 import { getErr } from './utils';
-import { Package, FolderTree } from 'lucide-react';
-import ProductList      from './ProductList';
-import ProductEditor    from './ProductEditor';
-import CategoryManager  from './editor/CategoryManager'; // ← new
+import { Package, FolderTree, Tag, ShoppingBag } from 'lucide-react';
+import ProductList     from './ProductList';
+import ProductEditor   from './ProductEditor';
+import CategoryManager from './editor/CategoryManager';
+import BrandManager    from './editor/BrandManager';
+import AdminOrders     from '../AdminProducts/editor/orders/AdminOrders';
+import { useOrderNotifications } from '../../../hooks/useOrderNotifications';
 
 export default function AdminProducts() {
-  // 'list' | 'form' | 'categories'
   const [view,       setView]       = useState('list');
   const [editingId,  setEditingId]  = useState(null);
   const [products,   setProducts]   = useState([]);
@@ -17,6 +19,9 @@ export default function AdminProducts() {
   const [loading,    setLoading]    = useState(true);
   const [search,     setSearch]     = useState('');
   const [deleting,   setDeleting]   = useState({});
+
+  
+  const { unreadCount, clearUnread } = useOrderNotifications();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -47,7 +52,7 @@ export default function AdminProducts() {
     if (!window.confirm('Permanently delete this product and all its variants?')) return;
     setDeleting(d => ({ ...d, [productId]: true }));
     try {
-      await api.delete(`/products/${productId}`);
+      await api.delete('/products/' + productId);
       toast.success('Product deleted');
       fetchAll();
     } catch (err) {
@@ -56,14 +61,9 @@ export default function AdminProducts() {
     }
   };
 
-  /* ── Categories view ── */
-  if (view === 'categories') {
-    return (
-      <CategoryManager onBack={() => { setView('list'); fetchAll(); }} />
-    );
-  }
-
-  /* ── Product editor ── */
+  // Full-page views that replace the tab layout entirely
+  if (view === 'categories') return <CategoryManager onBack={() => { setView('list'); fetchAll(); }} />;
+  if (view === 'brands')     return <BrandManager    onBack={() => { setView('list'); fetchAll(); }} />;
   if (view === 'form') {
     return (
       <ProductEditor
@@ -75,10 +75,9 @@ export default function AdminProducts() {
     );
   }
 
-  /* ── Product list (default) ── */
   return (
     <div>
-      {/* Tab bar */}
+      {/* ── Tab bar ── */}
       <div className="flex items-center gap-1 px-6 pt-5 border-b border-slate-200 bg-white">
         <TabButton
           active={view === 'list'}
@@ -87,6 +86,7 @@ export default function AdminProducts() {
         >
           Products
         </TabButton>
+
         <TabButton
           active={view === 'categories'}
           onClick={() => setView('categories')}
@@ -94,37 +94,63 @@ export default function AdminProducts() {
         >
           Categories
         </TabButton>
+
+        <TabButton
+          active={view === 'brands'}
+          onClick={() => setView('brands')}
+          icon={<Tag size={13} />}
+        >
+          Brands
+        </TabButton>
+
+        <TabButton
+          active={view === 'orders'}
+          onClick={() => { setView('orders'); clearUnread(); }}
+          icon={<ShoppingBag size={13} />}
+          badge={unreadCount}
+        >
+          Orders
+        </TabButton>
       </div>
 
-      <ProductList
-        products={products}
-        loading={loading}
-        search={search}
-        setSearch={setSearch}
-        deleting={deleting}
-        onRefresh={fetchAll}
-        onAdd={() => openEditor()}
-        onEdit={(id) => openEditor(id)}
-        onDelete={handleDelete}
-      />
+      {/* ── Tab content ── */}
+      {view === 'orders' ? (
+        <AdminOrders />
+      ) : (
+        <ProductList
+          products={products}
+          loading={loading}
+          search={search}
+          setSearch={setSearch}
+          deleting={deleting}
+          onRefresh={fetchAll}
+          onAdd={() => openEditor()}
+          onEdit={(id) => openEditor(id)}
+          onDelete={handleDelete}
+        />
+      )}
     </div>
   );
 }
 
-/* Small tab button used in the header */
-function TabButton({ children, active, onClick, icon }) {
+function TabButton({ children, active, onClick, icon, badge }) {
   return (
     <button
       onClick={onClick}
-      className={`
-        flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl
-        border-b-2 transition-colors -mb-px
-        ${active
+      className={[
+        'relative flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-colors -mb-px',
+        active
           ? 'text-slate-900 border-slate-900 bg-slate-50'
-          : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50'}
-      `}
+          : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50',
+      ].join(' ')}
     >
-      {icon}{children}
+      {icon}
+      {children}
+      {badge > 0 && (
+        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center leading-none">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </button>
   );
 }
