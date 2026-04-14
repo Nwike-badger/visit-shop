@@ -337,7 +337,7 @@ const CheckoutPage = () => {
                 ) : !isAddressValid ? (
                   'Complete Address'
                 ) : (
-                  <><CreditCard size={18} /> Pay Securely</>
+                  <><CreditCard size={18} /> Pay</>
                 )}
               </button>
               

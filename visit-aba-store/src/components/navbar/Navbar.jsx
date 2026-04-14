@@ -85,10 +85,10 @@ const Navbar = () => {
         <div className="max-w-[1440px] mx-auto px-4 flex justify-between items-center">
           <span className="hidden sm:inline opacity-80">Welcome to Nigeria's Premium Store</span>
           <div className="flex gap-6 mx-auto sm:mx-0 w-full justify-center sm:w-auto sm:justify-end">
-            <span>🚀 FREE SHIPPING ON ORDERS OVER ₦50,000</span>
+            <span> FREE SHIPPING ON ORDERS OVER ₦100,000</span>
             <span className="hidden sm:block opacity-60">|</span>
             <span className="hidden sm:flex items-center gap-1 opacity-80 hover:opacity-100 cursor-pointer">
-              <Phone size={12} /> Support: 0800-VISIT-ABA
+              <Phone size={12} /> Enquiry: 07032220306
             </span>
           </div>
         </div>

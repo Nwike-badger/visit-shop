@@ -24,10 +24,10 @@ const Home = () => {
   return (
     <main className="bg-gray-50/30 min-h-screen pb-10 font-sans overflow-x-hidden">
 
-      <CategoryBar />
+      
 
       {/* ─── 1. HERO: BENTO GRID ────────── */}
-      <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-6 sm:mb-16 mt-2">
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-6 sm:mb-16 mt-1">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:h-[550px]">
 
           <div className="lg:col-span-8 relative group overflow-hidden rounded-2xl sm:rounded-3xl bg-gray-900 shadow-sm min-h-[240px] sm:min-h-[360px] lg:min-h-0">
@@ -89,6 +89,7 @@ const Home = () => {
           </div>
         </div>
       </section>
+      <CategoryBar />
 
       {/* ─── 2. TRUST SIGNALS ────────────────── */}
       <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-8 sm:mb-20">
