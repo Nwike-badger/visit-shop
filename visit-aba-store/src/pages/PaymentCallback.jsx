@@ -130,7 +130,7 @@ const PaymentCallback = () => {
               to="/products"
               className="flex-1 bg-blue-50 text-blue-700 border border-blue-100 py-4 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors flex justify-center items-center gap-2 group"
             >
-              <Sparkles size={16} className="group-hover:rotate-12 transition-transform" /> Explore Drops
+              <Sparkles size={16} className="group-hover:rotate-12 transition-transform" /> Back to Products
             </Link>
           </div>
         </div>

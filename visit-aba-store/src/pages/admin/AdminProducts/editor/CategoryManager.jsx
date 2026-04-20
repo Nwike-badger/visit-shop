@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import api from '../../../../api/axiosConfig';
 import { toast } from 'react-hot-toast';
+import CategoryBarSettings from './CategoryBarSettings';
+
 import {
   FolderTree, Plus, Pencil, Trash2, ChevronRight, ChevronDown,
   Loader2, X, Image as ImageIcon, FolderOpen, Folder,
@@ -795,7 +797,8 @@ export default function CategoryManager({ onBack }) {
           )}
         </Card>
 
-       
+        {/* ── Category Bar Settings ── */}
+        <CategoryBarSettings allCategories={categories} />
 
       </div>
 
