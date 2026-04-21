@@ -1,54 +1,73 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { TOKEN_KEY } from '../api/axiosConfig';
 
-// 🚀 HELPER: Decodes the JWT token to find the real roles
+// ─── Helper ───────────────────────────────────────────────────────────────────
+// Reads ROLE_ADMIN directly from the JWT payload. We do this because the
+// backend UserResponse DTO may not include the roles field.
 const checkAdminFromToken = () => {
-  // Check your localStorage for whatever key your app uses (token, accessToken, jwt, etc.)
-  const token = localStorage.getItem('token') || localStorage.getItem('accessToken'); 
+  const token = localStorage.getItem(TOKEN_KEY);
   if (!token) return false;
-  
+
   try {
     const payload = token.split('.')[1];
-    const decoded = JSON.parse(atob(payload));
-    
+
+    // Restore standard Base64 from Base64URL encoding (RFC 7519 → RFC 4648)
+    const base64 = payload
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(payload.length + ((4 - (payload.length % 4)) % 4), '=');
+
+    const decoded = JSON.parse(window.atob(base64));
+
     const roles = decoded.roles || decoded.authorities || decoded.role || [];
+    
     if (Array.isArray(roles)) {
-       return roles.some(r => r === 'ROLE_ADMIN' || r.name === 'ROLE_ADMIN' || r.authority === 'ROLE_ADMIN');
+      return roles.some(
+        (r) => r === 'ROLE_ADMIN' || r.name === 'ROLE_ADMIN' || r.authority === 'ROLE_ADMIN'
+      );
     }
+    
     return roles === 'ROLE_ADMIN';
-  } catch (e) {
+  } catch (error) {
+    console.error('Token decoding failed:', error);
     return false;
   }
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
 const ProtectedRoute = ({ requireAdmin = false }) => {
-  const { user, isAuthenticated, loading } = useAuth(); 
+  const { user, isAuthenticated, loading } = useAuth();
 
-  // 1. Show nothing while checking authentication status
+  // 1. Wait until the cold-start auth check finishes
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center font-bold text-gray-400">Verifying Access...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center font-bold text-gray-400">
+        Verifying Access...
+      </div>
+    );
   }
 
-  // 2. If not logged in at all, kick to login page
+  // 2. Not logged in — send to login page
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  // 3. If the route requires an Admin, check the token directly
+  // 3. Admin-only route — verify role from token (most reliable source)
   if (requireAdmin) {
-    // We check the token directly because the backend UserResponse DTO might be missing the roles field
-    const isAdmin = checkAdminFromToken() || 
-                    user?.roles?.includes('ROLE_ADMIN') || 
-                    user?.role === 'ROLE_ADMIN';
-    
+    const isAdmin =
+      checkAdminFromToken() ||
+      user?.roles?.includes('ROLE_ADMIN') ||
+      user?.role === 'ROLE_ADMIN';
+
     if (!isAdmin) {
-      console.warn("Protected Route: No Admin role found in token or user object. Booting to homepage.");
+      console.warn('ProtectedRoute: Admin role not found — redirecting to homepage.');
       return <Navigate to="/" replace />;
     }
   }
 
-  // 4. If all checks pass, render the Admin Portal!
+  // 4. All checks passed
   return <Outlet />;
 };
 

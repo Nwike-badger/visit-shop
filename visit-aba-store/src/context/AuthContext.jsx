@@ -6,7 +6,7 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import api from '../api/axiosConfig';
+import api, { TOKEN_KEY } from '../api/axiosConfig';
 import { toast } from 'react-hot-toast';
 
 const AuthContext = createContext();
@@ -16,64 +16,73 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Stable reference — safe to use as a useEffect dependency anywhere in the app
+  // ─── logout ──────────────────────────────────────────────────────────────
+  // showToast = false during silent cold-start failures so the user isn't
+  // greeted with an error message on a page they never interacted with.
   const logout = useCallback((showToast = true) => {
-    localStorage.removeItem('token');
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setIsAuthenticated(false);
-    if (showToast) toast.success('Logged out successfully');
-    // Navigation is intentionally left to the calling component via React Router
+
+    if (showToast) {
+      toast("You've been signed out. See you soon! 👋", {
+        duration: 3000,
+      });
+    }
+    // Navigation is left to the calling component so it can use React Router.
   }, []);
 
-  // Stable reference — wrapping in useCallback prevents re-creating on every render
+  // ─── login ───────────────────────────────────────────────────────────────
   const login = useCallback(async (token, userData = null) => {
-    localStorage.setItem('token', token);
+    localStorage.setItem(TOKEN_KEY, token);
     setIsAuthenticated(true);
 
     if (userData) {
-      // Caller already has the user object (e.g. login response body) — use it directly
+      // Caller already holds the user object — use it directly.
       setUser(userData);
     } else {
-      // Fallback: fetch the current user profile from the server
+      // Fallback: fetch the profile from the server.
       try {
         const res = await api.get('/v1/users/me');
         setUser(res.data);
       } catch (error) {
-        console.error('Failed to fetch user after login', error);
-        toast.error('Failed to load user profile');
+        console.error('Failed to fetch user after login:', error);
+        toast.error("We couldn't load your profile right now. Please refresh the page.");
       }
     }
   }, []);
 
-  // Cold-start auth check: runs once on app mount to restore session from localStorage
+  // ─── Cold-start session restore ──────────────────────────────────────────
+  // Runs once on mount to rehydrate auth state from localStorage.
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem(TOKEN_KEY);
+
       if (token) {
         try {
-          // Axios interceptor in axiosConfig must attach the token automatically.
-          // If it doesn't exist, add: config.headers.Authorization = `Bearer ${token}`
           const res = await api.get('/v1/users/me');
           setUser(res.data);
           setIsAuthenticated(true);
         } catch (error) {
-          // Token is expired or invalid — clear it silently
+          // Token is expired or invalid — clear it silently (no toast on cold start).
           console.error('Auth check failed:', error);
           logout(false);
         }
       }
+
       setLoading(false);
     };
 
     initAuth();
   }, [logout]);
 
-  // Stable reference for updating user data from child pages (e.g. profile edit)
+  // ─── updateUser ──────────────────────────────────────────────────────────
+  // Allows child pages (e.g. profile edit, address update) to sync the global
+  // user object without triggering a full re-fetch.
   const updateUser = useCallback((newUserData) => {
     setUser(newUserData);
   }, []);
 
-  
   const contextValue = useMemo(
     () => ({ user, isAuthenticated, loading, login, logout, updateUser }),
     [user, isAuthenticated, loading, login, logout, updateUser]

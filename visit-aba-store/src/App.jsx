@@ -19,6 +19,7 @@ import SearchResults from "./pages/SearchResults";
 import OrdersPage from "./pages/account/OrdersPage";
 import OrderDetailPage from "./pages/account/OrderDetailPage";
 import PaymentCallback from "./pages/PaymentCallback";
+import CategoryPage from "./pages/CategoryPage";
 
 // --- ROUTE PROTECTION & LAYOUTS ---
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -35,7 +36,7 @@ function App() {
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <AuthProvider> 
         <CartProvider>
-          {/* 👈 NEW: Wrap with WishlistProvider */}
+          
           <WishlistProvider> 
             <BrowserRouter>
               <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
@@ -49,8 +50,9 @@ function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/products" element={<Catalog />} /> 
                     <Route path="/cart" element={<Cart />} />
-                    <Route path="/wishlist" element={<Wishlist />} /> {/* 👈 NEW: Wishlist Route */}
+                    <Route path="/wishlist" element={<Wishlist />} />
                     <Route path="/product/:id" element={<ProductPage />} />
+                    <Route path="/category/:slug" element={<CategoryPage />} />
                     <Route path="/checkout" element={<CheckoutPage />} />
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/signup" element={<SignupPage />} />
