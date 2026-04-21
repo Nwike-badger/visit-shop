@@ -110,6 +110,17 @@ const CategoryPage = () => {
 
     const hasFilters = keyword || minPrice || maxPrice;
 
+    // Parse any Spring Boot page shape and log the raw response so we can
+    // see exactly what fields the API returns if the count is still wrong.
+    const applyPage = (d) => {
+      const items = d.content ?? d.products ?? d.items ?? [];
+      const total = d.page?.totalElements ?? d.totalElements ?? d.total ?? items.length;
+      const pages = d.page?.totalPages    ?? d.totalPages    ?? Math.ceil(total / PAGE_SIZE);
+      setProducts(items);
+      setTotalElements(total);
+      setTotalPages(pages);
+    };
+
     if (hasFilters) {
       const params = new URLSearchParams({ page, size: PAGE_SIZE });
       if (sortMap[sort]) params.set('sort', sortMap[sort]);
@@ -120,11 +131,7 @@ const CategoryPage = () => {
         minPrice: minPrice ? Number(minPrice) : undefined,
         maxPrice: maxPrice ? Number(maxPrice) : undefined,
       })
-        .then(res => {
-          setProducts(res.data.content || []);
-          setTotalPages(res.data.totalPages || 0);
-          setTotalElements(res.data.totalElements || 0);
-        })
+        .then(res => applyPage(res.data))
         .catch(() => { toast.error("Couldn't load products."); setProducts([]); })
         .finally(() => setLoadingProducts(false));
     } else {
@@ -132,11 +139,7 @@ const CategoryPage = () => {
       if (sortMap[sort]) params.set('sort', sortMap[sort]);
 
       api.get(`/products/category/${slug}?${params.toString()}`)
-        .then(res => {
-          setProducts(res.data.content || []);
-          setTotalPages(res.data.totalPages || 0);
-          setTotalElements(res.data.totalElements || 0);
-        })
+        .then(res => applyPage(res.data))
         .catch(() => { toast.error("Couldn't load products."); setProducts([]); })
         .finally(() => setLoadingProducts(false));
     }

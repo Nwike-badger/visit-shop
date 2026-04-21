@@ -1,12 +1,10 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { 
-  Truck, ShieldCheck, Clock, ArrowRight, Zap, AlertCircle, 
-  RefreshCw, HelpCircle, FileText, Cookie 
-} from "lucide-react";
+import { ArrowRight, Zap, AlertCircle, RefreshCw } from "lucide-react";
 import CategoryBar from "../components/CategoryBar";
 import ProductSection from "../components/product/ProductSection";
 import ProductGrid from "../components/product/ProductGrid";
+import Footer from "../components/Footer";
 import useProducts from "../hooks/useProducts";
 
 const HOME_PRODUCT_LIMIT = 10;
@@ -22,9 +20,7 @@ const Home = () => {
   }, [products]);
 
   return (
-    <main className="bg-gray-50/30 min-h-screen pb-10 font-sans overflow-x-hidden">
-
-      
+    <main className="bg-gray-50/30 min-h-screen font-sans overflow-x-hidden">
 
       {/* ─── 1. HERO: BENTO GRID ────────── */}
       <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-6 sm:mb-16 mt-1">
@@ -89,39 +85,14 @@ const Home = () => {
           </div>
         </div>
       </section>
+
       <CategoryBar />
 
-      {/* ─── 2. TRUST SIGNALS ────────────────── */}
-      <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-8 sm:mb-20">
-        <div className="flex sm:grid sm:grid-cols-3 gap-2 sm:gap-6 overflow-x-auto snap-x snap-mandatory pb-2 sm:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          {[
-            { icon: Truck, title: "Nationwide Delivery", sub: "Fast & reliable logistics" },
-            { icon: ShieldCheck, title: "Secure Payments", sub: "100% encrypted" },
-            { icon: Clock, title: "24/7 Support", sub: "Always here to help" },
-          ].map(({ icon: Icon, title, sub }) => (
-            <div
-              key={title}
-              className="shrink-0 snap-center flex items-center gap-1.5 sm:gap-5 px-3 py-1.5 sm:p-6 bg-white rounded-full sm:rounded-2xl border border-gray-100 shadow-sm sm:hover:shadow-md transition-shadow"
-            >
-              <div className="text-green-600 sm:p-4 sm:bg-green-50 sm:rounded-xl sm:shrink-0">
-                <Icon size={12} className="sm:w-6 sm:h-6" />
-              </div>
-              <div className="flex items-center gap-1.5 sm:block truncate">
-                <h4 className="font-bold sm:font-black text-gray-900 text-[10px] sm:text-sm tracking-tight whitespace-nowrap">{title}</h4>
-                <p className="hidden sm:block text-xs text-gray-500 mt-0.5 font-medium truncate">{sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ─── 3. TOP PRODUCT SHOWCASE ─────────────────────────────────────── */}
-      <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-10 sm:mb-20">
+      {/* ─── 2. TOP PRODUCT SHOWCASE ─────────────────────────────────────── */}
+      <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-10 sm:mb-20 mt-8 sm:mt-16">
         {loading ? (
           <div className="bg-white p-5 sm:p-8 lg:p-10 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 min-h-[300px] sm:min-h-[400px] flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-              <div className="h-10 w-10 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
-            </div>
+            <div className="h-10 w-10 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : error ? (
           <div className="bg-white p-8 sm:p-20 rounded-2xl sm:rounded-3xl border border-gray-100 flex flex-col items-center text-center">
@@ -142,7 +113,7 @@ const Home = () => {
             </ProductSection>
             <div className="mt-6 sm:mt-10 text-center">
               <Link to="/products" className="inline-flex items-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3 border-2 border-gray-900 text-gray-900 text-xs sm:text-sm font-black uppercase tracking-widest rounded-xl hover:bg-gray-900 hover:text-white transition-all">
-                View All<ArrowRight size={14} className="sm:w-4 sm:h-4" />
+                View All <ArrowRight size={14} className="sm:w-4 sm:h-4" />
               </Link>
             </div>
           </div>
@@ -153,55 +124,8 @@ const Home = () => {
         )}
       </section>
 
-      {/* ─── 4. CUSTOMER INFO & LEGAL ───────────────────────────────────── */}
-      <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-12 shadow-sm border border-gray-100">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
-            
-            {/* Support Column */}
-            <div className="flex flex-col items-center md:items-start">
-              <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center mb-4">
-                <HelpCircle size={20} className="text-green-600" />
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-gray-900 mb-2">Need Help?</h3>
-              <p className="text-sm text-gray-500 font-medium mb-4">
-                Our support team is available 24/7 to assist you with orders and inquiries.
-              </p>
-              <Link to="/contact" className="text-sm font-bold text-green-600 hover:text-green-700 hover:underline">
-                Contact Support &rarr;
-              </Link>
-            </div>
-
-            {/* Legal Column */}
-            <div className="flex flex-col items-center md:items-start">
-              <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-                <FileText size={20} className="text-blue-600" />
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-gray-900 mb-2">Legal & Policies</h3>
-              <ul className="space-y-2 text-sm font-medium">
-                <li><Link to="/terms" className="text-gray-500 hover:text-gray-900 transition-colors">Terms & Conditions</Link></li>
-                <li><Link to="/privacy" className="text-gray-500 hover:text-gray-900 transition-colors">Privacy Policy</Link></li>
-                <li><Link to="/returns" className="text-gray-500 hover:text-gray-900 transition-colors">Return Policy</Link></li>
-              </ul>
-            </div>
-
-            {/* Privacy & Cookies Column */}
-            <div className="flex flex-col items-center md:items-start">
-              <div className="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center mb-4">
-                <Cookie size={20} className="text-purple-600" />
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-gray-900 mb-2">Privacy & Cookies</h3>
-              <p className="text-sm text-gray-500 font-medium mb-4">
-                We use cookies to ensure you get the best, most secure experience on our platform.
-              </p>
-              <Link to="/cookies" className="text-sm font-bold text-purple-600 hover:text-purple-700 hover:underline">
-                Manage Preferences &rarr;
-              </Link>
-            </div>
-
-          </div>
-        </div>
-      </section>
+      {/* ─── Footer ─────────────────────────────────────────────────── */}
+      <Footer />
 
     </main>
   );
