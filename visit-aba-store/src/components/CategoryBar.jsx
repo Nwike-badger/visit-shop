@@ -2,15 +2,16 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Layers } from 'lucide-react';
 import { useCategories } from '../hooks/useCategories';
+import api from '../api/axiosConfig';
 
 // ─── Config helpers (shared with CategoryBarSettings) ────────────────────────
 export const CAT_BAR_CONFIG_KEY = 'waylchub_cat_bar_config';
 
 export const defaultCatBarConfig = () => ({
-  parentSlug:     null,  // null = root level, else show children of this slug
-  order:          [],    // explicit ordering array of slugs; unlisted slugs come after
-  imageOverrides: {},    // { [slug]: string }  — admin-set image URLs
-  hiddenSlugs:    [],    // slugs to exclude from the bar
+  parentSlug:     null,
+  order:          [],
+  imageOverrides: {},
+  hiddenSlugs:    [],
 });
 
 export const loadCatBarConfig = () => {
@@ -78,8 +79,24 @@ const CategoryItem = ({ category, index, imageOverride }) => {
 const CategoryBar = () => {
   const { categories: allCategories, loading } = useCategories();
   const [config, setConfig] = useState(loadCatBarConfig);
+  const [serverParentSlug, setServerParentSlug] = useState(undefined); // undefined = not yet loaded
 
-  // Re-read config whenever admin saves new settings
+  // Fetch authoritative parent slug from backend on mount
+  useEffect(() => {
+    api.get('/v1/config/cat-bar')
+      .then(res => {
+        const slug = res.data?.catBarParentSlug ?? null;
+        setServerParentSlug(slug);
+        // Keep localStorage in sync so it acts as a fast cache on next visit
+        setConfig(prev => ({ ...prev, parentSlug: slug }));
+      })
+      .catch(() => {
+        // Fall back to localStorage silently on network error
+        setServerParentSlug(loadCatBarConfig().parentSlug ?? null);
+      });
+  }, []);
+
+  // Re-read order/hidden/imageOverrides from localStorage when admin saves
   useEffect(() => {
     const handler = () => setConfig(loadCatBarConfig());
     window.addEventListener('cat_bar_config_updated', handler);
@@ -87,26 +104,25 @@ const CategoryBar = () => {
   }, []);
 
   const categories = useMemo(() => {
-    if (!Array.isArray(allCategories)) return [];
+    if (!Array.isArray(allCategories) || serverParentSlug === undefined) return [];
 
-    // 1. Determine which pool of categories to show
     let pool;
-    if (!config.parentSlug) {
-      // Default: root-level only (original behaviour)
+    if (!serverParentSlug) {
+      // No parent configured — show root-level categories
       pool = allCategories.filter(
         (cat) => !cat.parent && !cat.parentId && !cat.parentSlug,
       );
     } else {
       // Show children of the configured parent slug
-      const parent = findNodeBySlug(allCategories, config.parentSlug);
+      const parent = findNodeBySlug(allCategories, serverParentSlug);
       pool = parent?.children ?? [];
     }
 
-    // 2. Remove admin-hidden slugs
+    // Remove admin-hidden slugs
     const hidden = new Set(config.hiddenSlugs ?? []);
     pool = pool.filter((c) => !hidden.has(c.slug));
 
-    // 3. Apply explicit ordering (pinned slugs first, unlisted follow)
+    // Apply explicit ordering (pinned slugs first, unlisted follow)
     if ((config.order ?? []).length > 0) {
       const orderMap = new Map(config.order.map((slug, i) => [slug, i]));
       pool = [...pool].sort((a, b) => {
@@ -117,10 +133,10 @@ const CategoryBar = () => {
     }
 
     return pool;
-  }, [allCategories, config]);
+  }, [allCategories, config, serverParentSlug]);
 
-  // ── Loading skeleton ──
-  if (loading) {
+  // Show skeleton while categories are loading OR server config hasn't arrived yet
+  if (loading || serverParentSlug === undefined) {
     return (
       <div className="bg-white border-b border-gray-100 mb-3 sm:mb-8">
         <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-4">

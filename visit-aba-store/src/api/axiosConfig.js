@@ -2,16 +2,23 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'react-hot-toast';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-// Single source of truth for the token key used across the app.
-// AuthContext must use the same key.
 export const TOKEN_KEY = 'token';
+
+// ─── Helper: check if a JWT is expired ───────────────────────────────────────
+const isTokenExpired = (token) => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true; // treat unreadable token as expired
+  }
+};
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true',
+    // removed ngrok header
   },
 });
 
@@ -22,63 +29,57 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-
     let guestId = localStorage.getItem('guest_cart_id');
     if (!guestId) {
       guestId = uuidv4();
       localStorage.setItem('guest_cart_id', guestId);
     }
     config.headers['X-Guest-ID'] = guestId;
-
     return config;
   },
   (error) => Promise.reject(error)
 );
 
 // ─── Response Interceptor ─────────────────────────────────────────────────────
-// Tracks whether a session-expiry toast has already been shown in this page
-// lifecycle so the user isn't spammed with multiple toasts on concurrent 401s.
 let sessionExpiredToastShown = false;
+
+const handleSessionExpired = () => {
+  if (sessionExpiredToastShown) return;
+  sessionExpiredToastShown = true;
+  localStorage.removeItem(TOKEN_KEY);
+  toast("For your security, you've been signed out. Please log in again.", {
+    icon: '🔐',
+    duration: 4000,
+  });
+  setTimeout(() => {
+    window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+  }, 800);
+};
 
 api.interceptors.response.use(
   (response) => {
-    // Reset the guard on any successful response (fresh session)
     sessionExpiredToastShown = false;
     return response;
   },
   (error) => {
-    if (!error.response) {
-      // Network error — no HTTP status available
-      return Promise.reject(error);
-    }
+    if (!error.response) return Promise.reject(error);
 
     const { status } = error.response;
+    const token = localStorage.getItem(TOKEN_KEY);
 
-    // 401 UNAUTHORIZED — token is missing, expired, or tampered
     if (status === 401) {
-      const hasToken = localStorage.getItem(TOKEN_KEY);
-      if (hasToken && !sessionExpiredToastShown) {
-        sessionExpiredToastShown = true;
-        localStorage.removeItem(TOKEN_KEY);
-
-        toast('For your security, you\'ve been signed out. Please log in again.', {
-          icon: '🔐',
-          duration: 4000,
+      if (token) handleSessionExpired();
+    } else if (status === 403) {
+      // If they have a token but it's expired, the backend may return 403
+      // instead of 401 on some routes — treat it as a session expiry
+      if (token && isTokenExpired(token)) {
+        handleSessionExpired();
+      } else {
+        toast("You don't have access to do that. If you think this is a mistake, please contact support.", {
+          icon: '🚫',
+          duration: 5000,
         });
-
-        // Small delay so the toast is readable before the redirect
-        setTimeout(() => {
-          window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-        }, 800);
       }
-    }
-
-    // 403 FORBIDDEN — authenticated but missing the required role/permission
-    else if (status === 403) {
-      toast("You don't have access to do that. If you think this is a mistake, please contact support.", {
-        icon: '🚫',
-        duration: 5000,
-      });
     }
 
     return Promise.reject(error);

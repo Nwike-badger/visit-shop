@@ -16,9 +16,7 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // ─── logout ──────────────────────────────────────────────────────────────
-  // showToast = false during silent cold-start failures so the user isn't
-  // greeted with an error message on a page they never interacted with.
+
   const logout = useCallback((showToast = true) => {
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
@@ -76,9 +74,7 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, [logout]);
 
-  // ─── updateUser ──────────────────────────────────────────────────────────
-  // Allows child pages (e.g. profile edit, address update) to sync the global
-  // user object without triggering a full re-fetch.
+  
   const updateUser = useCallback((newUserData) => {
     setUser(newUserData);
   }, []);

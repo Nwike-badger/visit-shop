@@ -4,8 +4,7 @@ import { toast } from 'react-hot-toast';
 import {
   Settings2, ChevronUp, ChevronDown, Eye, EyeOff,
   Image as ImageIcon, RotateCcw, Save, Loader2, X,
-  ArrowUpToLine, CheckCircle2, FolderOpen, Layers,
-  ExternalLink,
+  ArrowUpToLine, CheckCircle2, Layers,
 } from 'lucide-react';
 import { Card, CardHeader, CardBody } from '../SharedUI';
 import { CAT_BAR_CONFIG_KEY, defaultCatBarConfig, loadCatBarConfig } from '../../../../components/CategoryBar';
@@ -17,7 +16,6 @@ const persistConfig = (cfg) => {
   window.dispatchEvent(new Event('cat_bar_config_updated'));
 };
 
-/** Flatten tree so we can build a <select> of all categories */
 const flattenAll = (nodes, depth = 0, result = []) => {
   for (const n of nodes) {
     result.push({ slug: n.slug, name: n.name, depth });
@@ -26,7 +24,6 @@ const flattenAll = (nodes, depth = 0, result = []) => {
   return result;
 };
 
-/** Find a node by slug anywhere in tree */
 const findNode = (nodes, slug) => {
   for (const n of nodes) {
     if (n.slug === slug) return n;
@@ -40,19 +37,16 @@ const findNode = (nodes, slug) => {
 
 // ─── ImagePickerModal ─────────────────────────────────────────────────────────
 function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
-  const [url, setUrl]       = useState(currentUrl || '');
+  const [url, setUrl]           = useState(currentUrl || '');
   const [products, setProducts] = useState([]);
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    // Try to load products for this category to offer image choices
     const load = async () => {
       setLoading(true);
       try {
-        // Adjust query param name to match your backend
         const res = await api.get(`/products?categorySlug=${slug}&page=0&size=12`);
-        const list = res.data?.content ?? res.data ?? [];
-        setProducts(list);
+        setProducts(res.data?.content ?? res.data ?? []);
       } catch {
         setProducts([]);
       } finally {
@@ -62,7 +56,6 @@ function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
     load();
   }, [slug]);
 
-  // Collect distinct image URLs from products
   const productImages = useMemo(() => {
     const seen = new Set();
     const imgs = [];
@@ -80,7 +73,6 @@ function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>
             <h3 className="font-bold text-slate-900 text-sm">Override image</h3>
@@ -92,7 +84,6 @@ function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
         </div>
 
         <div className="p-5 space-y-4">
-          {/* URL input */}
           <div>
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
               Image URL
@@ -118,7 +109,6 @@ function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
             </div>
           </div>
 
-          {/* Product image picker */}
           <div>
             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
               Pick from products in this category
@@ -148,7 +138,6 @@ function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 bg-slate-50/60">
           <button
             onClick={() => { setUrl(''); onPick(''); }}
@@ -177,12 +166,26 @@ function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
 export default function CategoryBarSettings({ allCategories }) {
   const [config, setConfig]       = useState(loadCatBarConfig);
   const [saving, setSaving]       = useState(false);
-  const [pickerFor, setPickerFor] = useState(null); // slug string or null
+  const [loadingServer, setLoadingServer] = useState(true); // ← fetch server config on mount
+  const [pickerFor, setPickerFor] = useState(null);
 
-  // ── Flat list for the "source level" dropdown ──
+  // ── Fetch authoritative parentSlug from server on mount ──
+  // Without this, the admin panel shows a stale localStorage value if
+  // another device saved a different config.
+  useEffect(() => {
+    api.get('/v1/config/cat-bar')
+      .then(res => {
+        const serverSlug = res.data?.catBarParentSlug ?? null;
+        setConfig(prev => ({ ...prev, parentSlug: serverSlug }));
+      })
+      .catch(() => {
+        // Silently fall back to localStorage value already in state
+      })
+      .finally(() => setLoadingServer(false));
+  }, []);
+
   const flatOptions = useMemo(() => flattenAll(allCategories || []), [allCategories]);
 
-  // ── Pool: which categories would show given current config.parentSlug ──
   const poolFromTree = useMemo(() => {
     if (!Array.isArray(allCategories)) return [];
     if (!config.parentSlug) {
@@ -192,12 +195,10 @@ export default function CategoryBarSettings({ allCategories }) {
     return parent?.children ?? [];
   }, [allCategories, config.parentSlug]);
 
-  // ── Working list: pool ordered/hidden per current config ──
   const [items, setItems] = useState([]);
 
-  // Rebuild items whenever pool or order/hidden changes
   useEffect(() => {
-    const hidden = new Set(config.hiddenSlugs ?? []);
+    const hidden   = new Set(config.hiddenSlugs ?? []);
     const orderMap = new Map((config.order ?? []).map((s, i) => [s, i]));
 
     const withMeta = poolFromTree.map(cat => ({
@@ -206,17 +207,14 @@ export default function CategoryBarSettings({ allCategories }) {
       orderIdx: orderMap.has(cat.slug) ? orderMap.get(cat.slug) : 9999,
     }));
 
-    // Sort: by orderIdx first, then by original position
     withMeta.sort((a, b) => a.orderIdx - b.orderIdx);
     setItems(withMeta);
   }, [poolFromTree, config.order, config.hiddenSlugs]);
 
-  // ── Derive config.order from items array ──
   const extractOrder = (arr) => arr.map(it => it.slug);
 
-  // ── Move up/down ──
   const move = (idx, dir) => {
-    const next = [...items];
+    const next   = [...items];
     const target = idx + dir;
     if (target < 0 || target >= next.length) return;
     [next[idx], next[target]] = [next[target], next[idx]];
@@ -224,7 +222,6 @@ export default function CategoryBarSettings({ allCategories }) {
     setConfig(c => ({ ...c, order: extractOrder(next) }));
   };
 
-  // ── Pin to top ──
   const pinFirst = (idx) => {
     const next = [...items];
     const [item] = next.splice(idx, 1);
@@ -233,7 +230,6 @@ export default function CategoryBarSettings({ allCategories }) {
     setConfig(c => ({ ...c, order: extractOrder(next) }));
   };
 
-  // ── Toggle hidden ──
   const toggleHidden = (slug) => {
     setConfig(c => {
       const set = new Set(c.hiddenSlugs ?? []);
@@ -242,7 +238,6 @@ export default function CategoryBarSettings({ allCategories }) {
     });
   };
 
-  // ── Image override ──
   const applyImageOverride = (slug, url) => {
     setConfig(c => {
       const overrides = { ...c.imageOverrides };
@@ -255,20 +250,23 @@ export default function CategoryBarSettings({ allCategories }) {
     });
   };
 
-  // ── Source level change ──
   const handleParentChange = (slug) => {
     setConfig(c => ({
       ...c,
-      parentSlug: slug || null,
-      order: [],          // reset order when changing level
+      parentSlug:  slug || null,
+      order:       [],   // reset when changing level
       hiddenSlugs: [],
     }));
   };
 
-  // ── Save ──
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
+      // parentSlug → backend (device-independent source of truth)
+      await api.put('/v1/config/cat-bar', {
+        catBarParentSlug: config.parentSlug ?? null,
+      });
+      // order / hidden / imageOverrides → localStorage (lightweight UI prefs)
       persistConfig(config);
       toast.success('Category bar settings saved!');
     } catch {
@@ -278,15 +276,35 @@ export default function CategoryBarSettings({ allCategories }) {
     }
   };
 
-  // ── Reset ──
-  const handleReset = () => {
-    const fresh = defaultCatBarConfig();
-    setConfig(fresh);
-    persistConfig(fresh);
-    toast.success('Reset to defaults');
+  const handleReset = async () => {
+    setSaving(true);
+    try {
+      await api.put('/v1/config/cat-bar', { catBarParentSlug: null });
+      const fresh = defaultCatBarConfig();
+      setConfig(fresh);
+      persistConfig(fresh);
+      toast.success('Reset to defaults');
+    } catch {
+      toast.error('Failed to reset');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const visibleCount = items.filter(it => !it.hidden).length;
+
+  // Show a subtle loading state while fetching server config
+  if (loadingServer) {
+    return (
+      <Card>
+        <CardBody>
+          <div className="flex items-center gap-2 text-slate-400 text-xs py-4">
+            <Loader2 size={14} className="animate-spin" /> Loading settings…
+          </div>
+        </CardBody>
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -297,7 +315,8 @@ export default function CategoryBarSettings({ allCategories }) {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleReset}
-                className="text-[11px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors"
+                disabled={saving}
+                className="text-[11px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors disabled:opacity-50"
               >
                 <RotateCcw size={11} /> Reset
               </button>
@@ -361,14 +380,14 @@ export default function CategoryBarSettings({ allCategories }) {
                 <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   Order & Visibility
                 </label>
-                <p className="text-[10px] text-slate-400">Drag rows up/down or use arrows</p>
+                <p className="text-[10px] text-slate-400">Use arrows to reorder</p>
               </div>
 
               <div className="space-y-1.5">
                 {items.map((item, idx) => {
-                  const override = config.imageOverrides?.[item.slug];
+                  const override    = config.imageOverrides?.[item.slug];
                   const effectiveImg = override || item.imageUrl;
-                  const isHidden = item.hidden;
+                  const isHidden    = item.hidden;
 
                   return (
                     <div
@@ -379,7 +398,7 @@ export default function CategoryBarSettings({ allCategories }) {
                           : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      {/* Drag handle / index */}
+                      {/* Position index */}
                       <span className="text-[10px] font-black text-slate-300 w-4 text-center shrink-0">
                         {isHidden ? '—' : idx - items.filter((it, i) => i < idx && it.hidden).length + 1}
                       </span>
@@ -391,7 +410,12 @@ export default function CategoryBarSettings({ allCategories }) {
                         className="relative w-8 h-8 rounded-lg overflow-hidden border border-slate-200 hover:border-blue-400 shrink-0 transition-colors group/img"
                       >
                         {effectiveImg ? (
-                          <img src={effectiveImg} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; }} />
+                          <img
+                            src={effectiveImg}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={e => { e.target.style.display = 'none'; }}
+                          />
                         ) : (
                           <div className="w-full h-full bg-slate-100 flex items-center justify-center">
                             <ImageIcon size={12} className="text-slate-400" />
@@ -415,7 +439,6 @@ export default function CategoryBarSettings({ allCategories }) {
 
                       {/* Controls */}
                       <div className="flex items-center gap-0.5 shrink-0">
-                        {/* Pin to top */}
                         {idx > 0 && !isHidden && (
                           <button
                             onClick={() => pinFirst(idx)}
@@ -425,8 +448,6 @@ export default function CategoryBarSettings({ allCategories }) {
                             <ArrowUpToLine size={12} />
                           </button>
                         )}
-
-                        {/* Move up */}
                         <button
                           onClick={() => move(idx, -1)}
                           disabled={idx === 0}
@@ -434,8 +455,6 @@ export default function CategoryBarSettings({ allCategories }) {
                         >
                           <ChevronUp size={12} />
                         </button>
-
-                        {/* Move down */}
                         <button
                           onClick={() => move(idx, 1)}
                           disabled={idx === items.length - 1}
@@ -443,8 +462,6 @@ export default function CategoryBarSettings({ allCategories }) {
                         >
                           <ChevronDown size={12} />
                         </button>
-
-                        {/* Hide / Show */}
                         <button
                           onClick={() => toggleHidden(item.slug)}
                           title={isHidden ? 'Show in bar' : 'Hide from bar'}
@@ -462,7 +479,6 @@ export default function CategoryBarSettings({ allCategories }) {
                 })}
               </div>
 
-              {/* Legend */}
               <div className="flex items-center gap-4 mt-3 text-[10px] text-slate-400 px-1">
                 <span className="flex items-center gap-1"><ArrowUpToLine size={9} /> Pin first</span>
                 <span className="flex items-center gap-1"><ChevronUp size={9} /><ChevronDown size={9} /> Reorder</span>
@@ -475,7 +491,7 @@ export default function CategoryBarSettings({ allCategories }) {
           {/* ── Save bar ── */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <p className="text-[10px] text-slate-400">
-              Settings saved to localStorage and applied immediately.
+              Parent level saved to server · Order & visibility saved locally.
             </p>
             <button
               onClick={handleSave}
@@ -490,7 +506,6 @@ export default function CategoryBarSettings({ allCategories }) {
         </CardBody>
       </Card>
 
-      {/* ── Image picker modal ── */}
       {pickerFor && (
         <ImagePickerModal
           slug={pickerFor}
