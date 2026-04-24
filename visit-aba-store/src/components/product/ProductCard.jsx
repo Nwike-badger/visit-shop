@@ -2,63 +2,73 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Loader2, Star, Heart } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { useWishlist } from '../../context/WishlistContext'; // 👈 1. Import the new context
+import { useWishlist } from '../../context/WishlistContext';
 import { toast } from 'react-hot-toast';
 import api from '../../api/axiosConfig';
+import { thumbUrl, makeSrcSet } from '../../utils/imageUtils';
 
+// ─── Fallback ─────────────────────────────────────────────────────────────────
+const FALLBACK = 'https://placehold.co/400x533?text=No+Image';
+
+// ─── Image URL extractor — applies CDN optimisation ──────────────────────────
 const getDisplayImages = (product) => {
-  const fallback = "https://placehold.co/600x800?text=No+Image";
   if (!product.images || product.images.length === 0) {
-    return { primary: fallback, secondary: null };
+    return { primary: FALLBACK, secondary: null, primaryRaw: null };
   }
   const primaryImg   = product.images.find((img) => img.isPrimary) || product.images[0];
   const secondaryImg = product.images.find((img) => img.url !== primaryImg.url) || null;
   return {
-    primary:   primaryImg.url,
-    secondary: secondaryImg ? secondaryImg.url : null,
+    primary:    thumbUrl(primaryImg.url),
+    primaryRaw: primaryImg.url,                                    // needed for srcSet
+    secondary:  secondaryImg ? thumbUrl(secondaryImg.url) : null,
+    secondaryRaw: secondaryImg?.url ?? null,
   };
 };
 
-const ProductCard = ({ product, isFlashSale }) => {
-  const navigate = useNavigate();
-  const { addToCart } = useCart();
-  
-  // 👈 2. Pull exactly what we need from the Wishlist global state
-  const { isInWishlist, toggleWishlist } = useWishlist(); 
+// ─── ProductCard ──────────────────────────────────────────────────────────────
+/**
+ * Props
+ *   product      — product object from the API
+ *   isFlashSale  — shows the ⚡ Flash badge
+ *   priority     — true for the first ~5 cards visible above the fold;
+ *                  disables lazy-loading so they appear instantly.
+ *                  ProductGrid passes this automatically for index < 5.
+ */
+const ProductCard = ({ product, isFlashSale, priority = false }) => {
+  const navigate       = useNavigate();
+  const { addToCart }  = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
 
-  const [isAdding, setIsAdding] = useState(false);
-  const [imgError, setImgError] = useState(false);
-  
-  // 👈 3. Replaced 'wished' with a loading state to prevent spam-clicking the API
-  const [isWishLoading, setIsWishLoading] = useState(false); 
+  const [isAdding,     setIsAdding]     = useState(false);
+  const [imgError,     setImgError]     = useState(false);
+  const [isWishLoading, setIsWishLoading] = useState(false);
 
   const productId = product.id;
-  const price     = product.price || product.basePrice || 0;
-  const stock     = product.stockQuantity !== undefined ? product.stockQuantity : (product.totalStock || 0);
+  const price     = product.price || product.minPrice || product.basePrice || 0;
+  const stock     = product.stockQuantity !== undefined
+    ? product.stockQuantity
+    : (product.totalStock || 0);
   const isSoldOut = stock <= 0;
+  const isWished  = isInWishlist(productId);
 
-  // 👈 4. Dynamically check if this specific product is in the global wishlist
-  const isWished = isInWishlist(productId); 
-
+  // ── Quick-add ────────────────────────────────────────────────────────────
   const handleCartAction = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isSoldOut) { toast.error("This item is currently sold out."); return; }
+    if (isSoldOut) { toast.error('This item is currently sold out.'); return; }
     setIsAdding(true);
     try {
-      const response = await api.get(`/products/${productId}`);
+      const response   = await api.get(`/products/${productId}`);
       const fullProduct = response.data.product || response.data;
-      
-      const hasOptions = fullProduct.variantOptions && fullProduct.variantOptions.length > 0;
-      const hasMultipleVariants = fullProduct.variants && fullProduct.variants.length > 1;
-      
-      if (hasOptions || hasMultipleVariants) { navigate(`/product/${productId}`); return; }
-      
-      let targetVariantId = productId;
-      if (fullProduct.variants && fullProduct.variants.length === 1) {
-        targetVariantId = fullProduct.variants[0].id;
-      }
-      
+      const hasOptions  = fullProduct.variantOptions?.length > 0;
+      const hasMulti    = fullProduct.variants?.length > 1;
+
+      if (hasOptions || hasMulti) { navigate(`/product/${productId}`); return; }
+
+      const targetVariantId = fullProduct.variants?.length === 1
+        ? fullProduct.variants[0].id
+        : productId;
+
       await addToCart(targetVariantId, 1);
     } catch {
       navigate(`/product/${productId}`);
@@ -67,18 +77,30 @@ const ProductCard = ({ product, isFlashSale }) => {
     }
   };
 
-  // 👈 5. Updated handler to call the backend via context
+  // ── Wishlist ─────────────────────────────────────────────────────────────
   const handleWish = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isWishLoading) return; // Prevent double-clicks
-    
+    if (isWishLoading) return;
     setIsWishLoading(true);
     await toggleWishlist(productId);
     setIsWishLoading(false);
   };
 
-  const { primary, secondary } = getDisplayImages(product);
+  const { primary, primaryRaw, secondary, secondaryRaw } = getDisplayImages(product);
+
+  // ── Loading strategy: eager (priority) vs lazy ───────────────────────────
+  //    Cards above the fold get fetchpriority="high" + no lazy loading.
+  //    Everything else defers until the browser is idle.
+  const loadingAttr   = priority ? 'eager' : 'lazy';
+  const fetchPriority = priority ? 'high'  : 'low';
+
+  // Responsive sizes hint:
+  //   - 2-col mobile  → each card ~50vw
+  //   - 3-col sm      → ~33vw
+  //   - 4-col md      → ~25vw
+  //   - 5-col lg      → 20vw (capped at 320px in very wide viewports)
+  const sizesAttr = '(max-width:640px) 50vw, (max-width:768px) 33vw, (max-width:1024px) 25vw, 20vw';
 
   return (
     <Link
@@ -88,39 +110,50 @@ const ProductCard = ({ product, isFlashSale }) => {
                  hover:shadow-[0_16px_36px_-12px_rgba(0,0,0,0.12)] hover:border-green-100
                  transition-all duration-300"
     >
-      {/* ─── IMAGE ───────────────────────────────────────────────────────── */}
-      <div className="relative bg-gray-50 overflow-hidden aspect-[3/4] isolate">
+      {/* ── IMAGE ──────────────────────────────────────────────────────── */}
+      <div className="relative bg-gray-100 overflow-hidden aspect-[3/4] isolate">
 
-        {/* Primary image */}
+        {/* Primary */}
         <img
-          src={imgError ? "https://placehold.co/600x800?text=No+Image" : primary}
+          src={imgError ? FALLBACK : primary}
+          srcSet={!imgError && primaryRaw ? makeSrcSet(primaryRaw) : undefined}
+          sizes={sizesAttr}
           alt={product.name}
-          loading="lazy"
+          loading={loadingAttr}
+          fetchpriority={fetchPriority}
+          decoding="async"
+          width={400}
+          height={533}
           onError={() => setImgError(true)}
           className={`absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out will-change-transform
             ${isSoldOut ? 'grayscale opacity-50' : 'group-hover:scale-105'}`}
         />
 
-        {/* Secondary crossfade */}
+        {/* Secondary crossfade — only loaded when hovered (CSS opacity trick) */}
         {!isSoldOut && secondary && (
           <img
             src={secondary}
+            srcSet={secondaryRaw ? makeSrcSet(secondaryRaw) : undefined}
+            sizes={sizesAttr}
             alt={`${product.name} alternate view`}
             loading="lazy"
+            decoding="async"
+            width={400}
+            height={533}
             className="absolute inset-0 w-full h-full object-cover
                        transition-opacity duration-500 ease-in-out
                        opacity-0 group-hover:opacity-100"
           />
         )}
 
+        {/* Bottom gradient for text legibility over image */}
         <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
 
-        {/* ── WISHLIST pill (top-right) ── */}
-        {/* 👈 6. UI updated to use 'isWished' and show a spinner if loading */}
+        {/* ── Wishlist pill ── */}
         <button
           onClick={handleWish}
           disabled={isWishLoading}
-          aria-label="Save to wishlist"
+          aria-label={isWished ? 'Remove from wishlist' : 'Save to wishlist'}
           className={`absolute top-2 right-2 z-20 p-1.5 rounded-full backdrop-blur-md shadow-sm border transition-all
             ${isWished
               ? 'bg-red-500 border-red-500 text-white'
@@ -129,14 +162,13 @@ const ProductCard = ({ product, isFlashSale }) => {
             ${isWishLoading ? 'opacity-70 cursor-wait' : ''}
           `}
         >
-          {isWishLoading ? (
-             <Loader2 size={13} className="animate-spin text-current" />
-          ) : (
-             <Heart size={13} fill={isWished ? 'currentColor' : 'none'} />
-          )}
+          {isWishLoading
+            ? <Loader2 size={13} className="animate-spin text-current" />
+            : <Heart size={13} fill={isWished ? 'currentColor' : 'none'} />
+          }
         </button>
 
-        {/* ── BADGES (top-left) */}
+        {/* ── Badges ── */}
         <div className="absolute top-2 left-2 flex flex-col gap-1 z-20">
           {isSoldOut ? (
             <span className="bg-gray-900 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
@@ -158,7 +190,7 @@ const ProductCard = ({ product, isFlashSale }) => {
           )}
         </div>
 
-        {/* ── QUICK ADD ── */}
+        {/* ── Quick-add: desktop hover button ── */}
         {!isSoldOut && (
           <>
             <div className="hidden sm:block absolute bottom-2.5 left-2.5 right-2.5
@@ -174,10 +206,14 @@ const ProductCard = ({ product, isFlashSale }) => {
                            hover:bg-green-600 hover:text-white hover:border-green-600
                            transition-all disabled:opacity-60"
               >
-                {isAdding ? <Loader2 size={14} className="animate-spin" /> : <><ShoppingCart size={14} /> Add to Cart</>}
+                {isAdding
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <><ShoppingCart size={14} /> Add to Cart</>
+                }
               </button>
             </div>
 
+            {/* Quick-add: mobile FAB */}
             <button
               onClick={handleCartAction}
               disabled={isAdding}
@@ -197,10 +233,10 @@ const ProductCard = ({ product, isFlashSale }) => {
         )}
       </div>
 
-      {/* ─── TEXT INFO ───────────────────────────────────────────────────── */}
+      {/* ── TEXT INFO ───────────────────────────────────────────────────── */}
       <div className="flex flex-col flex-1 p-2 sm:p-3">
         <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest truncate mb-0.5 sm:mb-1">
-          {product.brandName || product.categoryName || "Premium"}
+          {product.brandName || product.categoryName || 'Premium'}
         </p>
 
         <h3 className="text-gray-900 font-semibold text-[11px] sm:text-sm leading-snug mb-1.5 sm:mb-2 line-clamp-2 group-hover:text-green-700 transition-colors">
@@ -211,9 +247,9 @@ const ProductCard = ({ product, isFlashSale }) => {
           <p className="text-gray-900 font-black text-sm sm:text-base tracking-tight">
             ₦{price.toLocaleString()}
           </p>
-          {product.discount > 0 && (
+          {product.discount > 0 && product.compareAtPrice && (
             <p className="text-[10px] sm:text-xs font-medium text-gray-400 line-through">
-              ₦{(price / (1 - product.discount / 100)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              ₦{product.compareAtPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </p>
           )}
         </div>

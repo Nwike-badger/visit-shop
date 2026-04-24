@@ -6,31 +6,34 @@ import ProductSection from "../components/product/ProductSection";
 import ProductGrid from "../components/product/ProductGrid";
 import Footer from "../components/Footer";
 import useProducts from "../hooks/useProducts";
+import { heroUrl, mediumUrl } from "../utils/imageUtils";
 
-const HOME_PRODUCT_LIMIT = 10;
+// ─── Raw source URLs (stored once; optimiser rewrites them at runtime) ────────
+const HERO_IMG  = "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80";
+const TECH_IMG  = "https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&w=600&q=80";
+const DECOR_IMG = "https://images.unsplash.com/photo-1616486338812-3dadae4b4f9d?auto=format&fit=crop&w=600&q=80";
 
 const Home = () => {
-  const { products, loading, error, refetch } = useProducts();
-
-  const safeProducts = useMemo(() => {
-    let list = [];
-    if (Array.isArray(products)) list = products;
-    else if (products?.content && Array.isArray(products.content)) list = products.content;
-    return list.slice(0, HOME_PRODUCT_LIMIT);
-  }, [products]);
+  const { products, loading, error, refetch } = useProducts(0, 10);
+  const safeProducts = Array.isArray(products) ? products : (products?.content ?? []);
 
   return (
     <main className="bg-gray-50/30 min-h-screen font-sans overflow-x-hidden">
 
-      {/* ─── 1. HERO: BENTO GRID ────────── */}
+      {/* ─── 1. HERO: BENTO GRID ──────────────────────────────────────── */}
       <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-6 sm:mb-16 mt-1">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:h-[550px]">
 
+          {/* ── Main hero card ── */}
           <div className="lg:col-span-8 relative group overflow-hidden rounded-2xl sm:rounded-3xl bg-gray-900 shadow-sm min-h-[240px] sm:min-h-[360px] lg:min-h-0">
             <img
-              src="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80"
+              src={heroUrl(HERO_IMG)}
               alt="New Fashion Collection"
-              fetchPriority="high"
+              fetchpriority="high"       // LCP image — load immediately
+              loading="eager"
+              decoding="async"
+              width={1400}
+              height={700}
               className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-1000 ease-out"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/20 to-transparent" />
@@ -50,12 +53,16 @@ const Home = () => {
             </div>
           </div>
 
+          {/* ── Bento side cards ── */}
           <div className="lg:col-span-4 flex flex-row lg:flex-col gap-2.5 sm:gap-4">
             <div className="flex-1 relative group overflow-hidden rounded-2xl sm:rounded-3xl bg-gray-800 shadow-sm min-h-[110px] sm:min-h-[250px] lg:min-h-0">
               <img
-                src="https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&w=600&q=80"
+                src={mediumUrl(TECH_IMG)}
                 alt="Electronics"
                 loading="lazy"
+                decoding="async"
+                width={800}
+                height={533}
                 className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-1000 ease-out"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/20 to-transparent" />
@@ -69,9 +76,12 @@ const Home = () => {
 
             <div className="flex-1 relative group overflow-hidden rounded-2xl sm:rounded-3xl bg-gray-800 shadow-sm min-h-[110px] sm:min-h-[250px] lg:min-h-0">
               <img
-                src="https://images.unsplash.com/photo-1616486338812-3dadae4b4f9d?auto=format&fit=crop&w=600&q=80"
+                src={mediumUrl(DECOR_IMG)}
                 alt="Home Living"
                 loading="lazy"
+                decoding="async"
+                width={800}
+                height={533}
                 className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-1000 ease-out"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/20 to-transparent" />
@@ -88,7 +98,7 @@ const Home = () => {
 
       <CategoryBar />
 
-      {/* ─── 2. TOP PRODUCT SHOWCASE ─────────────────────────────────────── */}
+      {/* ─── 2. TOP PRODUCT SHOWCASE ──────────────────────────────────── */}
       <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-10 sm:mb-20 mt-8 sm:mt-16">
         {loading ? (
           <div className="bg-white p-5 sm:p-8 lg:p-10 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 min-h-[300px] sm:min-h-[400px] flex items-center justify-center">
@@ -109,7 +119,12 @@ const Home = () => {
         ) : safeProducts.length > 0 ? (
           <div className="bg-white p-4 sm:p-8 lg:p-10 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100">
             <ProductSection title="Trending Now" align="left">
-              <ProductGrid products={safeProducts} columns={5} gap="normal" />
+              {/*
+                priorityCount=10 here because this is the first product grid on the page —
+                all 10 cards are potentially above the fold on desktop, so we give them all
+                eager/high-priority loading to hit the best possible LCP score.
+              */}
+              <ProductGrid products={safeProducts} columns={5} gap="normal" priorityCount={10} />
             </ProductSection>
             <div className="mt-6 sm:mt-10 text-center">
               <Link to="/products" className="inline-flex items-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3 border-2 border-gray-900 text-gray-900 text-xs sm:text-sm font-black uppercase tracking-widest rounded-xl hover:bg-gray-900 hover:text-white transition-all">
@@ -124,9 +139,7 @@ const Home = () => {
         )}
       </section>
 
-      {/* ─── Footer ─────────────────────────────────────────────────── */}
       <Footer />
-
     </main>
   );
 };

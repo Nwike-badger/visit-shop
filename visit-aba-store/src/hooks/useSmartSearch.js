@@ -1,78 +1,79 @@
-// ─── useSmartSearch.js ────────────────────────────────────────────────────────
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useCallback } from "react";
+import api from "../api/axiosConfig";
+import { getSessionId } from "../utils/session";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import api from '../api/axiosConfig';
-import { getSessionId } from '../utils/session';
-
-export const useSmartSearch = ({ query, categorySlug, minPrice, maxPrice, pageSize = 24 }) => {
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
-
-  const abortRef = useRef(null);
+export const useSmartSearch = ({ query, categorySlug, minPrice, maxPrice, page = 0, size = 10 }) => {
+  const queryClient = useQueryClient();
   const sessionId = getSessionId();
 
-  const fetchResults = useCallback(async (currentQuery, currentPage) => {
-    if (!currentQuery || !currentQuery.trim()) {
-      setResults([]);
-      setTotal(0);
-      return;
-    }
+  // Helper function to fetch data from your Spring Boot backend
+  const fetchSearchResults = async (currentPage) => {
+    if (!query || !query.trim()) return null;
+    
+    const params = new URLSearchParams({
+      q: query.trim(),
+      page: currentPage,
+      size,
+    });
 
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
+    if (categorySlug) params.set('category', categorySlug);
+    if (minPrice) params.set('minPrice', minPrice);
+    if (maxPrice) params.set('maxPrice', maxPrice);
 
-    setLoading(true);
-    setError(null);
+    const res = await api.get(`/v1/search?${params}`, {
+      headers: { 'X-Session-Id': sessionId },
+    });
 
-    try {
-      const params = new URLSearchParams({
-        q: currentQuery.trim(),
-        page: currentPage,
-        size: pageSize,
-      });
+    // Fire-and-forget search tracking
+    api.post('/v1/track/search', { query: query.trim() }, {
+      headers: { 'X-Session-Id': sessionId },
+    }).catch(() => {});
 
-      if (categorySlug) params.set('category', categorySlug);
-      if (minPrice) params.set('minPrice', minPrice);
-      if (maxPrice) params.set('maxPrice', maxPrice);
+    return res.data;
+  };
 
-      const res = await api.get(`/v1/search?${params}`, {
-        signal: abortRef.current.signal,
-        headers: { 'X-Session-Id': sessionId },
-      });
+  // Main Query: Handles caching, deduplication, and fetching
+  const { data, isLoading, isError, isFetching } = useQuery({
+    queryKey: ["search", query, categorySlug, minPrice, maxPrice, page, size], 
+    queryFn: () => fetchSearchResults(page),
+    enabled: !!query, 
+    staleTime: 1000 * 60 * 5, // Keep in cache for 5 minutes
+    keepPreviousData: true, // Crucial: Keeps current page visible while next page loads
+  });
 
-      setResults(res.data.content || res.data);
-      setTotal(res.data.totalElements || (res.data.content?.length ?? 0));
-
-      api.post('/v1/track/search', { query: currentQuery }, {
-        headers: { 'X-Session-Id': sessionId },
-      }).catch(() => {});
-
-    } catch (err) {
-      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
-      setError('Search failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [categorySlug, minPrice, maxPrice, pageSize, sessionId]);
-
+  // Enterprise Secret: Prefetch the NEXT page in the background
   useEffect(() => {
-    setPage(0);
-    const timer = setTimeout(() => fetchResults(query, 0), 350);
-    return () => clearTimeout(timer);
-  }, [query, categorySlug, minPrice, maxPrice]);
-
-  useEffect(() => {
-    if (page > 0) fetchResults(query, page);
-  }, [page]);
+    if (data && !data.last) {
+      queryClient.prefetchQuery({
+        queryKey: ["search", query, categorySlug, minPrice, maxPrice, page + 1, size],
+        queryFn: () => fetchSearchResults(page + 1),
+      });
+    }
+  }, [data, page, query, categorySlug, minPrice, maxPrice, size, queryClient]);
 
   const trackResultClick = useCallback((productId) => {
-    api.post('/track/search', { query, productId }, {
+    api.post('/v1/track/search', { query, productId }, {
       headers: { 'X-Session-Id': sessionId },
     }).catch(() => {});
   }, [query, sessionId]);
 
-  return { results, loading, error, total, page, setPage, trackResultClick };
+  // Safely extract Spring Boot Pageable properties
+  const content = data?.content || [];
+  
+  return {
+    results: content,
+    pageInfo: data ? {
+      number: data.number || page,
+      totalPages: data.totalPages || 1,
+      totalElements: data.totalElements || 0,
+      first: data.first ?? page === 0,
+      last: data.last ?? content.length < size
+    } : null,
+    loading: isLoading, // Only true on initial load with empty cache
+    isFetching, // True anytime a background request is running
+    error: isError,
+    total: data?.totalElements || 0,
+    trackResultClick
+  };
 };
