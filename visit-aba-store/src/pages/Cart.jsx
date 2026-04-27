@@ -180,7 +180,7 @@ const Cart = () => {
 
                 <div className="mt-6 flex flex-col items-center justify-center gap-2 text-xs font-bold text-gray-400">
                   <div className="flex items-center gap-1.5"><ShieldCheck size={16} className="text-green-500" /> 100% Secure Checkout</div>
-                  <p className="font-medium text-[10px] uppercase tracking-widest">We accept Visa, Mastercard, and Verve.</p>
+                  <p className="font-medium text-[10px] uppercase tracking-widest">We accept Visa, Mastercard, Verve, and bank transfers</p>
                 </div>
               </div>
             </div>
