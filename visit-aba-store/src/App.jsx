@@ -28,6 +28,10 @@ import AdminLayout from "./components/admin/AdminLayout";
 // --- ADMIN PAGES ---
 import AdminProducts from "./pages/admin/AdminProducts/Index";
 import AdminCampaigns from "./pages/admin/AdminCampaigns";
+import CustomDesignPage from "./pages/product/custom/CustomDesignPage";
+import CustomDesignerWizard from "./pages/product/custom/CustomDesignWizard";
+
+
 
 function App() {
   const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -57,7 +61,8 @@ function App() {
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/signup" element={<SignupPage />} />
                     <Route path="/search" element={<SearchResults />} />
-                    <Route path="/payment/callback" element={<PaymentCallback />} />
+                    <Route path="/custom" element={<CustomDesignPage />} />
+                    <Route path="/custom/order/:categoryId" element={<CustomDesignerWizard />} />
 
                     <Route element={<ProtectedRoute />}>
                         <Route path="/account" element={<AccountPage />} />

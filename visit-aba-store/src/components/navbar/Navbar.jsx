@@ -90,6 +90,7 @@ const Navbar = () => {
             <span className="hidden sm:flex items-center gap-1 opacity-80 hover:opacity-100 cursor-pointer">
               <Phone size={12} /> Enquiry: 07032220306
             </span>
+            <Link to="/custom" className="...">Custom</Link>
           </div>
         </div>
       </div>
