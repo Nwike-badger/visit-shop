@@ -6,6 +6,8 @@ import {
   Bookmark, Phone,
 } from 'lucide-react';
 import { CATEGORIES, STORAGE_KEYS, WHATSAPP_NUMBER } from './CustomDesignData';
+// PATCH 1 — live hook so admin edits to categories show up immediately
+import { useCustomCategories } from '../../../hooks/useCustomCategories';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CustomDesignPage  ·  /custom
@@ -62,6 +64,7 @@ const FontInjector = () => {
 
 // ───────────────────────────────────────────────────────────────────────────
 //  Resume draft banner (if user has an in-progress order)
+//  NOTE: still uses static CATEGORIES — only needs id→name lookup, not live data
 // ───────────────────────────────────────────────────────────────────────────
 
 const ResumeDraftBanner = () => {
@@ -98,6 +101,7 @@ const ResumeDraftBanner = () => {
 
 // ───────────────────────────────────────────────────────────────────────────
 //  Hero
+//  NOTE: still uses static CATEGORIES for background silhouette ornaments only
 // ───────────────────────────────────────────────────────────────────────────
 
 const Hero = () => (
@@ -167,11 +171,43 @@ const Stat = ({ n, label }) => (
 
 // ───────────────────────────────────────────────────────────────────────────
 //  Category grid
+//  PATCH 2 — uses the live hook instead of the static import
 // ───────────────────────────────────────────────────────────────────────────
 
 const CategoryGrid = () => {
   const [filter, setFilter] = useState('all'); // all | men | women | unisex
-  const filtered = CATEGORIES.filter((c) =>
+
+  // PATCH 2: swap CATEGORIES constant for live hook data
+  const { categories, loading, error } = useCustomCategories();
+
+  // Show spinner only on the very first load (no cached data yet)
+  if (loading && categories.length === 0) {
+    return (
+      <section id="categories" className="py-20 sm:py-28 px-5 sm:px-8">
+        <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[240px]">
+          <div className="text-stone-500 text-sm">Loading the atelier…</div>
+        </div>
+      </section>
+    );
+  }
+
+  // Show error only when there is truly nothing to display
+  if (error && categories.length === 0) {
+    return (
+      <section id="categories" className="py-20 sm:py-28 px-5 sm:px-8">
+        <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[240px] text-center">
+          <div>
+            <div className="font-display text-3xl text-stone-900 mb-2">Couldn't load categories</div>
+            <div className="text-sm text-stone-600">
+              Please refresh the page. If this keeps happening, message us on WhatsApp.
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const filtered = categories.filter((c) =>
     filter === 'all' ? true : c.gender === filter || c.gender === 'unisex',
   );
 
@@ -215,6 +251,10 @@ const CategoryGrid = () => {
   );
 };
 
+// ───────────────────────────────────────────────────────────────────────────
+//  PATCH 3 — CategoryCard prefers coverImageUrl; falls back to silhouette
+// ───────────────────────────────────────────────────────────────────────────
+
 const CategoryCard = ({ category }) => (
   <Link
     to={`/custom/order/${category.id}`}
@@ -233,13 +273,29 @@ const CategoryCard = ({ category }) => (
           backgroundImage: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.5) 0%, transparent 50%)',
         }}
       />
-      <div className="relative transition-transform duration-700 group-hover:scale-110" style={{ color: category.accent }}>
-        <CategorySilhouette path={category.silhouette} size={140} />
-      </div>
-      <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur-sm text-[10px] uppercase tracking-[0.15em] text-stone-700 rounded-sm">
+
+      {/* PATCH 3: real image when available, silhouette as fallback */}
+      {category.coverImageUrl ? (
+        <img
+          src={category.coverImageUrl}
+          alt={category.name}
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          loading="lazy"
+        />
+      ) : (
+        <div
+          className="relative transition-transform duration-700 group-hover:scale-110"
+          style={{ color: category.accent }}
+        >
+          <CategorySilhouette path={category.silhouette} size={140} />
+        </div>
+      )}
+
+      <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur-sm text-[10px] uppercase tracking-[0.15em] text-stone-700 rounded-sm z-10">
         {category.gender}
       </div>
-      <div className="absolute bottom-3 right-3 w-9 h-9 rounded-full bg-white/0 group-hover:bg-stone-900 flex items-center justify-center transition-all duration-300">
+      <div className="absolute bottom-3 right-3 w-9 h-9 rounded-full bg-white/0 group-hover:bg-stone-900 flex items-center justify-center transition-all duration-300 z-10">
         <ArrowRight className="w-4 h-4 text-stone-900 group-hover:text-white transition-colors" />
       </div>
     </div>
@@ -251,7 +307,7 @@ const CategoryCard = ({ category }) => (
       <div className="mt-auto flex items-center justify-between text-xs">
         <span className="text-stone-400">From</span>
         <span className="font-medium text-stone-900 tabular-nums">
-          ₦{category.priceFrom.toLocaleString()}
+          ₦{Number(category.priceFrom).toLocaleString()}
         </span>
       </div>
       <div className="mt-1 flex items-center gap-1.5 text-[11px] text-stone-400">

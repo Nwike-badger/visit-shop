@@ -2,12 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../../api/axiosConfig';
 import { toast } from 'react-hot-toast';
 import { getErr } from './utils';
-import { Package, FolderTree, Tag, ShoppingBag } from 'lucide-react';
-import ProductList     from './ProductList';
-import ProductEditor   from './ProductEditor';
-import CategoryManager from './editor/CategoryManager';
-import BrandManager    from './editor/BrandManager';
-import AdminOrders     from '../AdminProducts/editor/orders/AdminOrders';
+import { Package, FolderTree, Tag, ShoppingBag, Scissors, Layers } from 'lucide-react'; // CHANGE 1b — added Layers
+import ProductList        from './ProductList';
+import ProductEditor      from './ProductEditor';
+import CategoryManager    from './editor/CategoryManager';
+import BrandManager       from './editor/BrandManager';
+import AdminOrders        from '../AdminProducts/editor/orders/AdminOrders';
+import AdminCustomOrders  from '../AdminProducts/editor/orders/AdminCustomOrders';
+import AdminCustomCatalog from '../AdminProducts/editor/orders/AdminCustomCatalog';
 import { useOrderNotifications } from '../../../hooks/useOrderNotifications';
 
 export default function AdminProducts() {
@@ -20,7 +22,6 @@ export default function AdminProducts() {
   const [search,     setSearch]     = useState('');
   const [deleting,   setDeleting]   = useState({});
 
-  
   const { unreadCount, clearUnread } = useOrderNotifications();
 
   const fetchAll = useCallback(async () => {
@@ -61,7 +62,6 @@ export default function AdminProducts() {
     }
   };
 
-  // Full-page views that replace the tab layout entirely
   if (view === 'categories') return <CategoryManager onBack={() => { setView('list'); fetchAll(); }} />;
   if (view === 'brands')     return <BrandManager    onBack={() => { setView('list'); fetchAll(); }} />;
   if (view === 'form') {
@@ -78,31 +78,16 @@ export default function AdminProducts() {
   return (
     <div>
       {/* ── Tab bar ── */}
-      <div className="flex items-center gap-1 px-6 pt-5 border-b border-slate-200 bg-white">
-        <TabButton
-          active={view === 'list'}
-          onClick={() => setView('list')}
-          icon={<Package size={13} />}
-        >
+      <div className="flex items-center gap-1 px-6 pt-5 border-b border-slate-200 bg-white overflow-x-auto">
+        <TabButton active={view === 'list'} onClick={() => setView('list')} icon={<Package size={13} />}>
           Products
         </TabButton>
-
-        <TabButton
-          active={view === 'categories'}
-          onClick={() => setView('categories')}
-          icon={<FolderTree size={13} />}
-        >
+        <TabButton active={view === 'categories'} onClick={() => setView('categories')} icon={<FolderTree size={13} />}>
           Categories
         </TabButton>
-
-        <TabButton
-          active={view === 'brands'}
-          onClick={() => setView('brands')}
-          icon={<Tag size={13} />}
-        >
+        <TabButton active={view === 'brands'} onClick={() => setView('brands')} icon={<Tag size={13} />}>
           Brands
         </TabButton>
-
         <TabButton
           active={view === 'orders'}
           onClick={() => { setView('orders'); clearUnread(); }}
@@ -111,12 +96,28 @@ export default function AdminProducts() {
         >
           Orders
         </TabButton>
+        <TabButton
+          active={view === 'custom'}
+          onClick={() => setView('custom')}
+          icon={<Scissors size={13} />}
+        >
+          Custom Orders
+        </TabButton>
+        {/* CHANGE 2 — Custom Catalog tab */}
+        <TabButton
+          active={view === 'custom-catalog'}
+          onClick={() => setView('custom-catalog')}
+          icon={<Layers size={13} />}
+        >
+          Custom Catalog
+        </TabButton>
       </div>
 
       {/* ── Tab content ── */}
-      {view === 'orders' ? (
-        <AdminOrders />
-      ) : (
+      {view === 'orders'         && <AdminOrders />}
+      {view === 'custom'         && <AdminCustomOrders />}
+      {view === 'custom-catalog' && <AdminCustomCatalog />}  {/* CHANGE 3 — render new tab */}
+      {view !== 'orders' && view !== 'custom' && view !== 'custom-catalog' && (
         <ProductList
           products={products}
           loading={loading}
@@ -138,7 +139,7 @@ function TabButton({ children, active, onClick, icon, badge }) {
     <button
       onClick={onClick}
       className={[
-        'relative flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-colors -mb-px',
+        'relative flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-colors -mb-px whitespace-nowrap',
         active
           ? 'text-slate-900 border-slate-900 bg-slate-50'
           : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50',

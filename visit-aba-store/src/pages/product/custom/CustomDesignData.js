@@ -482,4 +482,4 @@ export const STORAGE_KEYS = {
 };
 
 // WhatsApp number for direct consultation (replace with real number)
-export const WHATSAPP_NUMBER = '2348000000000';
+export const WHATSAPP_NUMBER = '2348067087863';

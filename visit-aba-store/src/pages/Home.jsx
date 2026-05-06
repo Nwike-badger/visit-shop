@@ -8,10 +8,18 @@ import Footer from "../components/Footer";
 import useProducts from "../hooks/useProducts";
 import { heroUrl, mediumUrl } from "../utils/imageUtils";
 
-// ─── Raw source URLs (stored once; optimiser rewrites them at runtime) ────────
-const HERO_IMG  = "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80";
-const TECH_IMG  = "https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&w=600&q=80";
-const DECOR_IMG = "https://images.unsplash.com/photo-1616486338812-3dadae4b4f9d?auto=format&fit=crop&w=600&q=80";
+// ─── Hero image URLs ──────────────────────────────────────────────────────────
+// LCP hero: master tailor hand-stitching a garment in a sunlit atelier.
+const BESPOKE_HERO_IMG =
+  "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=1400&q=85&auto=format&fit=crop";
+
+// Clothes card: striking editorial shot — bold African print dress on model.
+const CLOTHES_IMG =
+  "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=85&auto=format&fit=crop";
+
+// Shoes card: artisan hands finishing a pair of polished leather dress shoes.
+const SHOES_IMG =
+  "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=800&q=85&auto=format&fit=crop";
 
 const Home = () => {
   const { products, loading, error, refetch } = useProducts(0, 10);
@@ -24,11 +32,11 @@ const Home = () => {
       <section className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 mb-6 sm:mb-16 mt-1">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:h-[550px]">
 
-          {/* ── Main hero card ── */}
+          {/* ── Main hero card: Bespoke ── */}
           <div className="lg:col-span-8 relative group overflow-hidden rounded-2xl sm:rounded-3xl bg-gray-900 shadow-sm min-h-[240px] sm:min-h-[360px] lg:min-h-0">
             <img
-              src={heroUrl(HERO_IMG)}
-              alt="New Fashion Collection"
+              src={heroUrl(BESPOKE_HERO_IMG)}
+              alt="Bespoke Tailoring"
               fetchpriority="high"       // LCP image — load immediately
               loading="eager"
               decoding="async"
@@ -39,26 +47,27 @@ const Home = () => {
             <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/20 to-transparent" />
             <div className="absolute bottom-0 left-0 p-4 sm:p-10 w-full">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-4 sm:py-1.5 bg-white text-gray-900 text-[8px] sm:text-[10px] font-black uppercase tracking-widest mb-2.5 sm:mb-6 rounded-full shadow-lg">
-                <Zap size={10} className="text-green-600 sm:w-3 sm:h-3" /> Premium
+                <Zap size={10} className="text-green-600 sm:w-3 sm:h-3" /> Custom Made
               </span>
               <h1 className="text-2xl sm:text-5xl md:text-6xl font-black text-white mb-3 sm:mb-6 leading-[1.1] tracking-tight">
                 Crafted in Aba, <br className="hidden sm:block" />Worn Globally.
               </h1>
               <Link
-                to="/category/fashion"
+                to="/custom"
                 className="inline-flex items-center gap-1.5 sm:gap-3 text-white text-[9px] sm:text-sm font-bold uppercase tracking-widest hover:text-emerald-400 transition-colors group/link"
               >
-                Explore <ArrowRight size={12} className="sm:w-4 sm:h-4 group-hover/link:translate-x-2 transition-transform" />
+                Custom <ArrowRight size={12} className="sm:w-4 sm:h-4 group-hover/link:translate-x-2 transition-transform" />
               </Link>
             </div>
           </div>
 
           {/* ── Bento side cards ── */}
           <div className="lg:col-span-4 flex flex-row lg:flex-col gap-2.5 sm:gap-4">
+            {/* ── Clothes ── */}
             <div className="flex-1 relative group overflow-hidden rounded-2xl sm:rounded-3xl bg-gray-800 shadow-sm min-h-[110px] sm:min-h-[250px] lg:min-h-0">
               <img
-                src={mediumUrl(TECH_IMG)}
-                alt="Electronics"
+                src={mediumUrl(CLOTHES_IMG)}
+                alt="Nigerian Fashion Clothes"
                 loading="lazy"
                 decoding="async"
                 width={800}
@@ -67,17 +76,18 @@ const Home = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/20 to-transparent" />
               <div className="absolute bottom-0 left-0 p-3 sm:p-8">
-                <h3 className="text-sm sm:text-2xl font-black text-white mb-0.5 sm:mb-2 tracking-tight">Tech</h3>
-                <Link to="/category/electronics" className="text-[8px] sm:text-[10px] font-bold text-white uppercase tracking-widest hover:text-emerald-400 transition-colors">
-                  Shop &rarr;
+                <h3 className="text-sm sm:text-2xl font-black text-white mb-0.5 sm:mb-2 tracking-tight">Clothes</h3>
+                <Link to="/category/clothes" className="text-[8px] sm:text-[10px] font-bold text-white uppercase tracking-widest hover:text-emerald-400 transition-colors">
+                  Explore &rarr;
                 </Link>
               </div>
             </div>
 
+            {/* ── Shoes ── */}
             <div className="flex-1 relative group overflow-hidden rounded-2xl sm:rounded-3xl bg-gray-800 shadow-sm min-h-[110px] sm:min-h-[250px] lg:min-h-0">
               <img
-                src={mediumUrl(DECOR_IMG)}
-                alt="Home Living"
+                src={mediumUrl(SHOES_IMG)}
+                alt="Made in Nigeria Leather Shoes"
                 loading="lazy"
                 decoding="async"
                 width={800}
@@ -86,9 +96,9 @@ const Home = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/20 to-transparent" />
               <div className="absolute bottom-0 left-0 p-3 sm:p-8">
-                <h3 className="text-sm sm:text-2xl font-black text-white mb-0.5 sm:mb-2 tracking-tight">Decor</h3>
-                <Link to="/category/home-living" className="text-[8px] sm:text-[10px] font-bold text-white uppercase tracking-widest hover:text-emerald-400 transition-colors">
-                  Shop &rarr;
+                <h3 className="text-sm sm:text-2xl font-black text-white mb-0.5 sm:mb-2 tracking-tight">Shoes</h3>
+                <Link to="/category/shoes" className="text-[8px] sm:text-[10px] font-bold text-white uppercase tracking-widest hover:text-emerald-400 transition-colors">
+                  Explore &rarr;
                 </Link>
               </div>
             </div>

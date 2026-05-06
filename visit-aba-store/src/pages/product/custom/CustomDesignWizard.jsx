@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import {
   ChevronLeft, ChevronRight, Check, Upload, X, Info,
   MessageCircle, Save, ShieldCheck, Phone, MapPin,
   CheckCircle2, Bookmark, Trash2, Ruler, Image as ImageIcon,
   Sparkles, Pencil, Calendar, AlertCircle, Copy, ArrowRight,
+  Loader2,
 } from 'lucide-react';
+import api from '../../../api/axiosConfig';
+
+// CHANGE 1 — removed CATEGORIES, getCategoryById from CustomDesignData import.
+// useCustomCategory fetches the live single-category+styles from the backend.
+import { useCustomCategory } from '../../../hooks/useCustomCategories';
 import {
-  CATEGORIES, getCategoryById, getMeasurementsForCategory,
+  getMeasurementsForCategory,
   SIZE_CHARTS, FITTING_PREFERENCES, STORAGE_KEYS, WHATSAPP_NUMBER,
 } from './CustomDesignData';
 
@@ -18,10 +25,11 @@ import {
 
 const CustomDesignerWizard = () => {
   const { categoryType, categoryId: paramId } = useParams();
-  // Support both /custom/order/:categoryId and /custom/design/:garmentType
   const id = paramId || categoryType;
-  const category = getCategoryById(id);
   const navigate = useNavigate();
+
+  // CHANGE 2 — async hook replaces synchronous getCategoryById(id)
+  const { category, loading: categoryLoading, error: categoryError } = useCustomCategory(id);
 
   // ──────── State ────────
   const isGendered = category?.gender !== 'unisex';
@@ -39,6 +47,15 @@ const CustomDesignerWizard = () => {
   const [order, setOrder] = useState(initialOrder);
   const [stepIndex, setStepIndex] = useState(0);
   const [submitted, setSubmitted] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // CHANGE 4 — once the async category loads, set gender for non-unisex types.
+  // Without this, isGendered is computed against null on first render.
+  useEffect(() => {
+    if (category && category.gender !== 'unisex' && !order.gender) {
+      setOrder((o) => ({ ...o, gender: category.gender }));
+    }
+  }, [category]);
 
   // ──────── Step config ────────
   const steps = useMemo(() => {
@@ -95,10 +112,9 @@ const CustomDesignerWizard = () => {
       case 'size':
         if (order.size.useTailor) return true;
         if (order.size.mode === 'chart') return !!order.size.chartSize;
-        // manual: at least 4 measurements filled
         return Object.values(order.size.measurements).filter(Boolean).length >= 4;
       case 'details':
-        return true; // all optional
+        return true;
       case 'contact':
         return order.contact.name.trim() && (order.contact.phone.trim() || order.contact.whatsapp.trim());
       case 'review':
@@ -117,28 +133,84 @@ const CustomDesignerWizard = () => {
     else navigate('/custom');
   };
 
-  // ──────── Submit ────────
-  const handleSubmit = () => {
-    const ref = generateReference();
-    const orderRecord = {
-      ref,
+  // ──────── Submit — hits the backend ────────
+  const handleSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+
+    const payload = {
       categoryId: id,
-      categoryName: category.name,
-      submittedAt: Date.now(),
-      ...order,
+      gender: order.gender?.toUpperCase() || (category.gender === 'women' ? 'WOMEN' : 'MEN'),
+
+      selectedStyleId: order.style.selectedId,
+      referenceImages: (order.style.customImages || []).map((img) => ({ dataUrl: img.dataUrl })),
+      styleNotes: order.style.styleNotes,
+
+      sizeMode: order.size.useTailor ? 'TAILOR_VISIT'
+        : order.size.mode === 'chart' ? 'CHART' : 'MANUAL',
+      chartSize: order.size.chartSize || null,
+      measurements: order.size.measurements || {},
+      profileName: order.size.profileName || null,
+
+      fitting: order.details.fitting?.toUpperCase() || 'REGULAR',
+      fabric: order.details.fabric || null,
+      color: order.details.color || null,
+      occasion: order.details.occasion || null,
+      needBy: order.details.needBy || null,
+      notes: order.details.notes || null,
+
+      customerName: order.contact.name,
+      whatsappNumber: order.contact.whatsapp || null,
+      phoneNumber: order.contact.phone || null,
+      customerEmail: order.contact.email || null,
+
+      deliveryMode: order.contact.delivery === 'aba' ? 'ABA' : 'NIGERIA',
+      deliveryAddress: order.contact.address?.trim() ? {
+        streetAddress: order.contact.address,
+        city: order.contact.delivery === 'aba' ? 'Aba' : '',
+        state: order.contact.delivery === 'aba' ? 'Abia' : '',
+        country: 'Nigeria',
+        phoneNumber: order.contact.whatsapp || order.contact.phone || null,
+      } : null,
+
+      idempotencyKey: crypto.randomUUID(),
     };
+
     try {
-      const existing = JSON.parse(localStorage.getItem(STORAGE_KEYS.orders) || '[]');
-      existing.unshift(orderRecord);
-      localStorage.setItem(STORAGE_KEYS.orders, JSON.stringify(existing));
-    } catch {}
-    // clear draft
-    try { localStorage.removeItem(STORAGE_KEYS.draft); } catch {}
-    setSubmitted(orderRecord);
+      const response = await api.post('/v1/custom-orders', payload);
+      const submittedRecord = response.data;
+      try { localStorage.removeItem(STORAGE_KEYS.draft); } catch {}
+      setSubmitted({
+        ref: submittedRecord.referenceNumber,
+        categoryId: id,
+        categoryName: submittedRecord.categoryName,
+        contact: order.contact,
+      });
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Failed to submit your order. Please try again.';
+      toast.error(message, { duration: 5000 });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // ──────── Empty / loading ────────
-  if (!category) {
+  // CHANGE 3 — loading + error guards replace the old `if (!category)` block.
+  // These MUST come after all hooks but before any category-dependent render.
+  if (categoryLoading) {
+    return (
+      <div className="min-h-screen bg-[#faf7f2] flex items-center justify-center px-5">
+        <div className="text-stone-500 text-sm flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading…
+        </div>
+      </div>
+    );
+  }
+
+  if (categoryError || !category) {
     return (
       <div className="min-h-screen bg-[#faf7f2] flex items-center justify-center px-5">
         <div className="text-center">
@@ -176,6 +248,7 @@ const CustomDesignerWizard = () => {
         onBack={onBack}
         onContinue={onContinue}
         onSubmit={handleSubmit}
+        submitting={submitting}
         backLabel={stepIndex === 0 ? 'Categories' : 'Back'}
         priceFrom={category.priceFrom}
       />
@@ -219,7 +292,6 @@ const ProgressHeader = ({ steps, stepIndex, setStepIndex, category }) => (
         ))}
       </div>
     </div>
-    {/* Mobile progress bar */}
     <div className="sm:hidden h-1 bg-stone-200">
       <div
         className="h-full bg-emerald-700 transition-all duration-500"
@@ -229,12 +301,13 @@ const ProgressHeader = ({ steps, stepIndex, setStepIndex, category }) => (
   </header>
 );
 
-const FlowFooter = ({ canContinue, isReview, onBack, onContinue, onSubmit, backLabel, priceFrom }) => (
+const FlowFooter = ({ canContinue, isReview, onBack, onContinue, onSubmit, submitting, backLabel, priceFrom }) => (
   <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-stone-200">
     <div className="max-w-4xl mx-auto px-5 sm:px-8 py-4 flex items-center gap-4">
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900 transition"
+        disabled={submitting}
+        className="inline-flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900 transition disabled:opacity-40"
       >
         <ChevronLeft className="w-4 h-4" />
         {backLabel}
@@ -247,10 +320,18 @@ const FlowFooter = ({ canContinue, isReview, onBack, onContinue, onSubmit, backL
       {isReview ? (
         <button
           onClick={onSubmit}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-medium text-sm transition shadow-sm"
+          disabled={submitting}
+          className={`inline-flex items-center gap-2 px-6 py-3 rounded-full font-medium text-sm transition shadow-sm ${
+            submitting
+              ? 'bg-emerald-700/60 text-white cursor-not-allowed'
+              : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+          }`}
         >
-          <Check className="w-4 h-4" />
-          Submit for quote
+          {submitting ? (
+            <><Loader2 className="w-4 h-4 animate-spin" />Submitting…</>
+          ) : (
+            <><Check className="w-4 h-4" />Submit for quote</>
+          )}
         </button>
       ) : (
         <button
@@ -274,41 +355,39 @@ const FlowFooter = ({ canContinue, isReview, onBack, onContinue, onSubmit, backL
 //  STEP — GENDER (only for unisex categories)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const GenderStep = ({ order, setGender }) => {
-  return (
-    <StepShell
-      eyebrow="Step 01"
-      title={<>Who is this <em className="font-display-italic text-emerald-800">for?</em></>}
-      subtitle="We'll tailor the measurement fields and fit defaults accordingly."
-    >
-      <div className="grid sm:grid-cols-2 gap-4 mt-8">
-        {[
-          { id: 'men',   name: 'For Him', desc: 'Men\'s cut, men\'s measurements' },
-          { id: 'women', name: 'For Her', desc: 'Women\'s cut, includes bust & hip' },
-        ].map((g) => {
-          const active = order.gender === g.id;
-          return (
-            <button
-              key={g.id}
-              onClick={() => setGender(g.id)}
-              className={`group relative overflow-hidden p-8 rounded-sm border-2 text-left transition ${
-                active ? 'border-emerald-700 bg-emerald-50/40' : 'border-stone-200 bg-white hover:border-stone-400'
-              }`}
-            >
-              <div className="font-display text-3xl text-stone-900 mb-1">{g.name}</div>
-              <div className="text-sm text-stone-600">{g.desc}</div>
-              {active && (
-                <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-emerald-700 flex items-center justify-center">
-                  <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </StepShell>
-  );
-};
+const GenderStep = ({ order, setGender }) => (
+  <StepShell
+    eyebrow="Step 01"
+    title={<>Who is this <em className="font-display-italic text-emerald-800">for?</em></>}
+    subtitle="We'll tailor the measurement fields and fit defaults accordingly."
+  >
+    <div className="grid sm:grid-cols-2 gap-4 mt-8">
+      {[
+        { id: 'men',   name: 'For Him', desc: "Men's cut, men's measurements" },
+        { id: 'women', name: 'For Her', desc: "Women's cut, includes bust & hip" },
+      ].map((g) => {
+        const active = order.gender === g.id;
+        return (
+          <button
+            key={g.id}
+            onClick={() => setGender(g.id)}
+            className={`group relative overflow-hidden p-8 rounded-sm border-2 text-left transition ${
+              active ? 'border-emerald-700 bg-emerald-50/40' : 'border-stone-200 bg-white hover:border-stone-400'
+            }`}
+          >
+            <div className="font-display text-3xl text-stone-900 mb-1">{g.name}</div>
+            <div className="text-sm text-stone-600">{g.desc}</div>
+            {active && (
+              <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-emerald-700 flex items-center justify-center">
+                <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  </StepShell>
+);
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  STEP — STYLE
@@ -321,13 +400,13 @@ const StyleStep = ({ order, update, category }) => {
   const onUpload = (files) => {
     const fileArr = Array.from(files);
     if (customImages.length + fileArr.length > 4) {
-      alert('Maximum 4 reference images.');
+      toast.error('Maximum 4 reference images.');
       return;
     }
     fileArr.forEach((file) => {
       if (!file.type.startsWith('image/')) return;
       if (file.size > 5 * 1024 * 1024) {
-        alert(`${file.name} is over 5MB. Please use a smaller image.`);
+        toast.error(`${file.name} is over 5MB. Please use a smaller image.`);
         return;
       }
       const reader = new FileReader();
@@ -341,14 +420,12 @@ const StyleStep = ({ order, update, category }) => {
   };
 
   const removeImage = (idx) => {
-    update('style', {
-      customImages: customImages.filter((_, i) => i !== idx),
-    });
+    update('style', { customImages: customImages.filter((_, i) => i !== idx) });
   };
 
   return (
     <StepShell
-      eyebrow={`Step · Style`}
+      eyebrow="Step · Style"
       title={<>Pick a style, or <em className="font-display-italic text-emerald-800">show us yours.</em></>}
       subtitle="Choose from our gallery, upload reference images, or both. Sketches, screenshots, Pinterest pics — all welcome."
     >
@@ -369,12 +446,28 @@ const StyleStep = ({ order, update, category }) => {
                   background: `linear-gradient(135deg, ${category.accent}15 0%, ${category.accent}05 100%)`,
                 }}
               >
-                <div
-                  className="absolute inset-0 flex items-center justify-center transition-transform group-hover:scale-105"
-                  style={{ color: category.accent }}
-                >
-                  <CategorySilhouette path={category.silhouette} size={90} />
+                {/* CHANGE 5 — real image if uploaded by admin, silhouette fallback */}
+                <div className="absolute inset-0 transition-transform group-hover:scale-105">
+                  {s.imageUrl ? (
+                    <img
+                      src={s.imageUrl}
+                      alt={s.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling?.style.removeProperty('display');
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{ color: category.accent, display: s.imageUrl ? 'none' : 'flex' }}
+                  >
+                    {category.silhouette && <CategorySilhouette path={category.silhouette} size={90} />}
+                  </div>
                 </div>
+
                 <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-white via-white/95 to-transparent text-left">
                   <div className="font-medium text-xs text-stone-900 truncate">{s.name}</div>
                   <div className="text-[10px] text-stone-500 truncate">{s.tone}</div>
@@ -399,7 +492,6 @@ const StyleStep = ({ order, update, category }) => {
           </div>
           <span className="text-xs text-stone-400">{customImages.length}/4</span>
         </div>
-
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {customImages.map((img, i) => (
             <div key={i} className="relative aspect-[3/4] rounded-sm overflow-hidden bg-stone-100 border border-stone-200">
@@ -424,14 +516,7 @@ const StyleStep = ({ order, update, category }) => {
             </button>
           )}
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => onUpload(e.target.files)}
-          className="hidden"
-        />
+        <input ref={fileRef} type="file" accept="image/*" multiple onChange={(e) => onUpload(e.target.files)} className="hidden" />
       </div>
 
       {/* Style notes */}
@@ -460,9 +545,8 @@ const SizeStep = ({ order, update, category }) => {
   const sizeChart = order.gender === 'women' ? SIZE_CHARTS.women : SIZE_CHARTS.men;
   const [guideField, setGuideField] = useState(null);
   const [showSaved, setShowSaved] = useState(false);
-
-  // Saved profiles
   const [savedProfiles, setSavedProfiles] = useState([]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.measurements);
@@ -471,38 +555,24 @@ const SizeStep = ({ order, update, category }) => {
   }, []);
 
   const setMode = (mode) => update('size', { mode, useTailor: false });
-
-  const setMeasurement = (id, value) => {
-    update('size', { measurements: { ...order.size.measurements, [id]: value } });
-  };
+  const setMeasurement = (id, value) => update('size', { measurements: { ...order.size.measurements, [id]: value } });
 
   const useSavedProfile = (profile) => {
-    update('size', {
-      mode: 'manual',
-      measurements: profile.values || {},
-      profileName: profile.name,
-      useTailor: false,
-    });
+    update('size', { mode: 'manual', measurements: profile.values || {}, profileName: profile.name, useTailor: false });
     setShowSaved(false);
   };
 
   const saveProfile = () => {
     const name = order.size.profileName?.trim();
-    if (!name) {
-      alert('Give this profile a name (e.g., "My measurements", "Wedding outfit").');
-      return;
-    }
-    if (Object.values(order.size.measurements).filter(Boolean).length < 4) {
-      alert('Fill in at least 4 measurements before saving.');
-      return;
-    }
+    if (!name) { toast.error('Give this profile a name (e.g., "My measurements", "Wedding outfit").'); return; }
+    if (Object.values(order.size.measurements).filter(Boolean).length < 4) { toast.error('Fill in at least 4 measurements before saving.'); return; }
     try {
       const existing = JSON.parse(localStorage.getItem(STORAGE_KEYS.measurements) || '[]');
       const filtered = existing.filter((p) => p.name !== name);
       filtered.push({ name, gender: order.gender, values: order.size.measurements, savedAt: Date.now() });
       localStorage.setItem(STORAGE_KEYS.measurements, JSON.stringify(filtered));
       setSavedProfiles(filtered);
-      alert('Measurements saved. You can reuse them on future orders.');
+      toast.success('Measurements saved. Reuse them on future orders.');
     } catch {}
   };
 
@@ -512,14 +582,12 @@ const SizeStep = ({ order, update, category }) => {
       title={<>Tell us your <em className="font-display-italic text-emerald-800">size.</em></>}
       subtitle="Use our size chart, type in exact measurements, or have a tailor measure you in person."
     >
-      {/* Mode toggle */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-8">
         <ModeButton active={order.size.mode === 'chart' && !order.size.useTailor} onClick={() => setMode('chart')} icon={Ruler} label="Size chart" sub="S/M/L/XL" />
         <ModeButton active={order.size.mode === 'manual' && !order.size.useTailor} onClick={() => setMode('manual')} icon={Pencil} label="Enter measurements" sub="Most accurate" />
         <ModeButton active={order.size.useTailor} onClick={() => update('size', { useTailor: true })} icon={MessageCircle} label="Tailor visit" sub="We measure you" />
       </div>
 
-      {/* Saved profiles bar */}
       {!order.size.useTailor && savedProfiles.length > 0 && (
         <div className="mb-6">
           <button
@@ -537,15 +605,9 @@ const SizeStep = ({ order, update, category }) => {
           {showSaved && (
             <div className="mt-2 grid sm:grid-cols-2 gap-2">
               {savedProfiles.map((p, i) => (
-                <button
-                  key={i}
-                  onClick={() => useSavedProfile(p)}
-                  className="p-3 bg-white border border-stone-200 hover:border-emerald-700 rounded-sm text-left transition"
-                >
+                <button key={i} onClick={() => useSavedProfile(p)} className="p-3 bg-white border border-stone-200 hover:border-emerald-700 rounded-sm text-left transition">
                   <div className="font-medium text-sm text-stone-900">{p.name}</div>
-                  <div className="text-xs text-stone-500 mt-0.5">
-                    {p.gender} · {Object.keys(p.values || {}).length} measurements
-                  </div>
+                  <div className="text-xs text-stone-500 mt-0.5">{p.gender} · {Object.keys(p.values || {}).length} measurements</div>
                 </button>
               ))}
             </div>
@@ -553,16 +615,10 @@ const SizeStep = ({ order, update, category }) => {
         </div>
       )}
 
-      {/* CONTENT — varies by mode */}
       {order.size.useTailor ? (
         <TailorVisitCard />
       ) : order.size.mode === 'chart' ? (
-        <SizeChartView
-          chart={sizeChart}
-          gender={order.gender}
-          selected={order.size.chartSize}
-          onSelect={(size) => update('size', { chartSize: size })}
-        />
+        <SizeChartView chart={sizeChart} gender={order.gender} selected={order.size.chartSize} onSelect={(size) => update('size', { chartSize: size })} />
       ) : (
         <ManualMeasurements
           fields={measurementFields}
@@ -575,19 +631,13 @@ const SizeStep = ({ order, update, category }) => {
         />
       )}
 
-      {/* Measurement guide modal */}
       {guideField && <GuideModal field={guideField} onClose={() => setGuideField(null)} />}
     </StepShell>
   );
 };
 
 const ModeButton = ({ active, onClick, icon: Icon, label, sub }) => (
-  <button
-    onClick={onClick}
-    className={`p-4 rounded-sm border-2 text-left transition ${
-      active ? 'border-emerald-700 bg-emerald-50/40' : 'border-stone-200 bg-white hover:border-stone-400'
-    }`}
-  >
+  <button onClick={onClick} className={`p-4 rounded-sm border-2 text-left transition ${active ? 'border-emerald-700 bg-emerald-50/40' : 'border-stone-200 bg-white hover:border-stone-400'}`}>
     <Icon className={`w-5 h-5 mb-2 ${active ? 'text-emerald-800' : 'text-stone-500'}`} strokeWidth={1.5} />
     <div className="font-medium text-sm text-stone-900 leading-tight">{label}</div>
     <div className="text-[11px] text-stone-500 mt-0.5">{sub}</div>
@@ -608,35 +658,16 @@ const SizeChartView = ({ chart, gender, selected, onSelect }) => {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-stone-50 text-xs uppercase tracking-[0.1em] text-stone-500">
-            <tr>
-              {cols.map((c) => (
-                <th key={c} className="text-left px-5 py-3 font-medium">{c}</th>
-              ))}
-              <th className="px-5 py-3 w-10" />
-            </tr>
+            <tr>{cols.map((c) => <th key={c} className="text-left px-5 py-3 font-medium">{c}</th>)}<th className="px-5 py-3 w-10" /></tr>
           </thead>
           <tbody>
             {chart.map((row) => {
               const active = selected === row.size;
               return (
-                <tr
-                  key={row.size}
-                  onClick={() => onSelect(row.size)}
-                  className={`border-t border-stone-100 cursor-pointer transition ${
-                    active ? 'bg-emerald-50' : 'hover:bg-stone-50'
-                  }`}
-                >
-                  {cols.map((c) => (
-                    <td key={c} className={`px-5 py-3.5 tabular-nums ${c === 'size' ? 'font-medium text-stone-900' : 'text-stone-600'}`}>
-                      {row[c]}
-                    </td>
-                  ))}
+                <tr key={row.size} onClick={() => onSelect(row.size)} className={`border-t border-stone-100 cursor-pointer transition ${active ? 'bg-emerald-50' : 'hover:bg-stone-50'}`}>
+                  {cols.map((c) => <td key={c} className={`px-5 py-3.5 tabular-nums ${c === 'size' ? 'font-medium text-stone-900' : 'text-stone-600'}`}>{row[c]}</td>)}
                   <td className="px-5 py-3.5 text-right">
-                    {active ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-700 inline" strokeWidth={1.5} />
-                    ) : (
-                      <span className="w-5 h-5 inline-block rounded-full border border-stone-300" />
-                    )}
+                    {active ? <CheckCircle2 className="w-5 h-5 text-emerald-700 inline" strokeWidth={1.5} /> : <span className="w-5 h-5 inline-block rounded-full border border-stone-300" />}
                   </td>
                 </tr>
               );
@@ -654,11 +685,10 @@ const SizeChartView = ({ chart, gender, selected, onSelect }) => {
 
 const ManualMeasurements = ({ fields, values, onChange, onShowGuide, profileName, setProfileName, onSaveProfile }) => {
   const groups = {
-    upper: { label: 'Upper Body', fields: fields.filter((f) => f.group === 'upper') },
-    lower: { label: 'Lower Body', fields: fields.filter((f) => f.group === 'lower') },
+    upper:  { label: 'Upper Body',     fields: fields.filter((f) => f.group === 'upper') },
+    lower:  { label: 'Lower Body',     fields: fields.filter((f) => f.group === 'lower') },
     length: { label: 'Garment Length', fields: fields.filter((f) => f.group === 'length') },
   };
-
   return (
     <div className="space-y-8">
       <div className="bg-emerald-50/60 border border-emerald-200 rounded-sm p-4 text-sm text-emerald-900 flex gap-3">
@@ -669,45 +699,31 @@ const ManualMeasurements = ({ fields, values, onChange, onShowGuide, profileName
           {' '}icon next to any field to see a how-to-measure guide.
         </div>
       </div>
-
-      {Object.values(groups).map(
-        (g) =>
-          g.fields.length > 0 && (
-            <div key={g.label}>
-              <h4 className="text-xs uppercase tracking-[0.15em] text-stone-500 mb-3">{g.label}</h4>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {g.fields.map((f) => (
-                  <div key={f.id} className="relative">
-                    <label className="absolute top-2.5 left-3 text-[10px] uppercase tracking-[0.1em] text-stone-500 font-medium pointer-events-none">
-                      {f.label}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.25"
-                      value={values[f.id] || ''}
-                      onChange={(e) => onChange(f.id, e.target.value)}
-                      placeholder={f.placeholder}
-                      className="w-full pt-7 pb-3 pl-3 pr-16 bg-white border border-stone-200 rounded-sm text-base font-medium tabular-nums focus:outline-none focus:border-stone-900 transition"
-                    />
-                    <div className="absolute top-1/2 right-2 -translate-y-1/2 flex items-center gap-1">
-                      <span className="text-xs text-stone-400">in</span>
-                      <button
-                        type="button"
-                        onClick={() => onShowGuide(f)}
-                        className="w-6 h-6 rounded-full bg-stone-100 hover:bg-emerald-100 hover:text-emerald-800 flex items-center justify-center text-stone-500 transition"
-                        aria-label={`How to measure ${f.label}`}
-                      >
-                        <span className="text-xs font-medium">?</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+      {Object.values(groups).map((g) => g.fields.length > 0 && (
+        <div key={g.label}>
+          <h4 className="text-xs uppercase tracking-[0.15em] text-stone-500 mb-3">{g.label}</h4>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {g.fields.map((f) => (
+              <div key={f.id} className="relative">
+                <label className="absolute top-2.5 left-3 text-[10px] uppercase tracking-[0.1em] text-stone-500 font-medium pointer-events-none">{f.label}</label>
+                <input
+                  type="number" step="0.25"
+                  value={values[f.id] || ''}
+                  onChange={(e) => onChange(f.id, e.target.value)}
+                  placeholder={f.placeholder}
+                  className="w-full pt-7 pb-3 pl-3 pr-16 bg-white border border-stone-200 rounded-sm text-base font-medium tabular-nums focus:outline-none focus:border-stone-900 transition"
+                />
+                <div className="absolute top-1/2 right-2 -translate-y-1/2 flex items-center gap-1">
+                  <span className="text-xs text-stone-400">in</span>
+                  <button type="button" onClick={() => onShowGuide(f)} className="w-6 h-6 rounded-full bg-stone-100 hover:bg-emerald-100 hover:text-emerald-800 flex items-center justify-center text-stone-500 transition" aria-label={`How to measure ${f.label}`}>
+                    <span className="text-xs font-medium">?</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          ),
-      )}
-
-      {/* Save profile */}
+            ))}
+          </div>
+        </div>
+      ))}
       <div className="bg-white border border-stone-200 rounded-sm p-5">
         <div className="flex items-center gap-3 mb-3">
           <Save className="w-5 h-5 text-emerald-700" strokeWidth={1.5} />
@@ -717,19 +733,8 @@ const ManualMeasurements = ({ fields, values, onChange, onShowGuide, profileName
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="text"
-            value={profileName}
-            onChange={(e) => setProfileName(e.target.value)}
-            placeholder="Name this profile (e.g., My measurements, Mom)"
-            className="flex-1 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 focus:bg-white transition"
-          />
-          <button
-            onClick={onSaveProfile}
-            className="px-5 py-2.5 bg-stone-900 hover:bg-emerald-900 text-white text-sm font-medium rounded-sm transition"
-          >
-            Save profile
-          </button>
+          <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="Name this profile (e.g., My measurements, Mom)" className="flex-1 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 focus:bg-white transition" />
+          <button onClick={onSaveProfile} className="px-5 py-2.5 bg-stone-900 hover:bg-emerald-900 text-white text-sm font-medium rounded-sm transition">Save profile</button>
         </div>
       </div>
     </div>
@@ -744,9 +749,7 @@ const TailorVisitCard = () => (
       </div>
       <div>
         <div className="font-display text-2xl text-stone-900 leading-tight mb-1">A tailor will measure you</div>
-        <div className="text-sm text-stone-600">
-          Within Aba, this is free. Outside Aba, we coordinate via WhatsApp video call.
-        </div>
+        <div className="text-sm text-stone-600">Within Aba, this is free. Outside Aba, we coordinate via WhatsApp video call.</div>
       </div>
     </div>
     <ul className="space-y-2.5 text-sm text-stone-600 mb-6">
@@ -762,22 +765,14 @@ const TailorVisitCard = () => (
 );
 
 const GuideModal = ({ field, onClose }) => (
-  <div
-    className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6"
-    onClick={onClose}
-  >
-    <div
-      className="bg-white w-full sm:max-w-md rounded-t-lg sm:rounded-sm shadow-xl"
-      onClick={(e) => e.stopPropagation()}
-    >
+  <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={onClose}>
+    <div className="bg-white w-full sm:max-w-md rounded-t-lg sm:rounded-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
       <div className="p-6 border-b border-stone-200 flex items-start justify-between gap-4">
         <div>
           <div className="text-xs uppercase tracking-[0.15em] text-emerald-800 mb-1.5">How to measure</div>
           <div className="font-display text-2xl text-stone-900 leading-tight">{field.label}</div>
         </div>
-        <button onClick={onClose} className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center transition shrink-0">
-          <X className="w-4 h-4" />
-        </button>
+        <button onClick={onClose} className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center transition shrink-0"><X className="w-4 h-4" /></button>
       </div>
       <div className="p-6">
         <div className="aspect-video bg-emerald-50/60 rounded-sm mb-5 flex items-center justify-center text-emerald-800">
@@ -792,46 +787,33 @@ const GuideModal = ({ field, onClose }) => (
   </div>
 );
 
-// Tiny inline diagrams (icon-style, no external assets needed)
 const MeasureDiagram = ({ field }) => {
-  const stroke = 'currentColor';
-  const dash = 'currentColor';
-  // simple body silhouette + highlight stroke depending on field
+  const c = 'currentColor';
   return (
     <svg viewBox="0 0 200 140" width="100%" height="100%">
-      {/* Body outline */}
-      <path
-        d="M100 20 Q88 22 85 32 L78 50 L70 56 L70 110 L85 110 L86 70 L114 70 L115 110 L130 110 L130 56 L122 50 L115 32 Q112 22 100 20 Z"
-        fill="none"
-        stroke={stroke}
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-        opacity="0.35"
-      />
-      {/* Highlight per field */}
-      {(field === 'neck') && <ellipse cx="100" cy="28" rx="14" ry="4" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'chest' || field === 'bust') && <ellipse cx="100" cy="48" rx="26" ry="6" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'underBust') && <ellipse cx="100" cy="56" rx="22" ry="5" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'waist') && <ellipse cx="100" cy="68" rx="18" ry="4" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'hip' || field === 'highHip') && <ellipse cx="100" cy="82" rx="24" ry="5" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'shoulder') && <line x1="78" y1="38" x2="122" y2="38" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'sleeve') && <line x1="124" y1="40" x2="142" y2="92" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'bicep') && <ellipse cx="128" cy="52" rx="6" ry="3" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'wrist') && <ellipse cx="142" cy="92" rx="4" ry="2" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'inseam') && <line x1="100" y1="74" x2="100" y2="124" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'outseam') && <line x1="125" y1="68" x2="125" y2="124" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'thigh') && <ellipse cx="92" cy="88" rx="7" ry="3" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'knee') && <ellipse cx="92" cy="100" rx="5" ry="2.5" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'ankle') && <ellipse cx="92" cy="118" rx="4" ry="2" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'trouserWaist') && <ellipse cx="100" cy="72" rx="20" ry="4" fill="none" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'backLength' || field === 'frontLength') && <line x1="100" y1="32" x2="100" y2="68" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'shoulderToBust') && <line x1="92" y1="36" x2="92" y2="50" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'bustPointDistance') && <line x1="88" y1="48" x2="112" y2="48" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'topLength') && <line x1="125" y1="32" x2="125" y2="80" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'dressLength' || field === 'fullLength') && <line x1="125" y1="32" x2="125" y2="124" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {(field === 'skirtLength') && <line x1="125" y1="68" x2="125" y2="120" stroke={dash} strokeWidth="2" strokeDasharray="3,2" />}
-      {/* small tape symbol */}
-      <text x="166" y="20" fontSize="9" fill={stroke} opacity="0.5" fontFamily="DM Sans">tape</text>
+      <path d="M100 20 Q88 22 85 32 L78 50 L70 56 L70 110 L85 110 L86 70 L114 70 L115 110 L130 110 L130 56 L122 50 L115 32 Q112 22 100 20 Z" fill="none" stroke={c} strokeWidth="1.2" strokeLinejoin="round" opacity="0.35" />
+      {field === 'neck'             && <ellipse cx="100" cy="28" rx="14" ry="4"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {(field === 'chest' || field === 'bust') && <ellipse cx="100" cy="48" rx="26" ry="6"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'underBust'        && <ellipse cx="100" cy="56" rx="22" ry="5"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'waist'            && <ellipse cx="100" cy="68" rx="18" ry="4"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {(field === 'hip' || field === 'highHip') && <ellipse cx="100" cy="82" rx="24" ry="5"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'shoulder'         && <line x1="78"  y1="38"  x2="122" y2="38"  stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'sleeve'           && <line x1="124" y1="40"  x2="142" y2="92"  stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'bicep'            && <ellipse cx="128" cy="52" rx="6"  ry="3"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'wrist'            && <ellipse cx="142" cy="92" rx="4"  ry="2"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'inseam'           && <line x1="100" y1="74"  x2="100" y2="124" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'outseam'          && <line x1="125" y1="68"  x2="125" y2="124" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'thigh'            && <ellipse cx="92"  cy="88" rx="7"  ry="3"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'knee'             && <ellipse cx="92"  cy="100" rx="5" ry="2.5" fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'ankle'            && <ellipse cx="92"  cy="118" rx="4" ry="2"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'trouserWaist'     && <ellipse cx="100" cy="72" rx="20" ry="4"   fill="none" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {(field === 'backLength' || field === 'frontLength') && <line x1="100" y1="32" x2="100" y2="68"  stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'shoulderToBust'   && <line x1="92"  y1="36"  x2="92"  y2="50"  stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'bustPointDistance' && <line x1="88" y1="48"  x2="112" y2="48"  stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'topLength'        && <line x1="125" y1="32"  x2="125" y2="80"  stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {(field === 'dressLength' || field === 'fullLength') && <line x1="125" y1="32" x2="125" y2="124" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      {field === 'skirtLength'      && <line x1="125" y1="68"  x2="125" y2="120" stroke={c} strokeWidth="2" strokeDasharray="3,2" />}
+      <text x="166" y="20" fontSize="9" fill={c} opacity="0.5" fontFamily="DM Sans">tape</text>
     </svg>
   );
 };
@@ -847,20 +829,13 @@ const DetailsStep = ({ order, update }) => (
     subtitle="All optional. The more you tell us, the better the quote we can give you."
   >
     <div className="space-y-8">
-      {/* Fitting */}
       <div>
         <label className="block text-xs uppercase tracking-[0.15em] text-stone-500 mb-3">Fitting preference</label>
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {FITTING_PREFERENCES.map((f) => {
             const active = order.details.fitting === f.id;
             return (
-              <button
-                key={f.id}
-                onClick={() => update('details', { fitting: f.id })}
-                className={`p-4 rounded-sm border-2 text-left transition ${
-                  active ? 'border-emerald-700 bg-emerald-50/40' : 'border-stone-200 bg-white hover:border-stone-400'
-                }`}
-              >
+              <button key={f.id} onClick={() => update('details', { fitting: f.id })} className={`p-4 rounded-sm border-2 text-left transition ${active ? 'border-emerald-700 bg-emerald-50/40' : 'border-stone-200 bg-white hover:border-stone-400'}`}>
                 <div className="font-medium text-sm text-stone-900">{f.name}</div>
                 <div className="text-[11px] text-stone-500 mt-1 leading-snug">{f.desc}</div>
               </button>
@@ -868,56 +843,23 @@ const DetailsStep = ({ order, update }) => (
           })}
         </div>
       </div>
-
-      {/* Fabric & Color (free-form for now) */}
       <div className="grid sm:grid-cols-2 gap-4">
-        <FieldText
-          label="Fabric preference"
-          value={order.details.fabric}
-          onChange={(v) => update('details', { fabric: v })}
-          placeholder="e.g., Cashmere, Cotton, Aso-Oke, Lace"
-          help="Or leave blank — we'll suggest options in the quote."
-        />
-        <FieldText
-          label="Color preference"
-          value={order.details.color}
-          onChange={(v) => update('details', { color: v })}
-          placeholder="e.g., Navy, Cream, Burgundy"
-        />
+        <FieldText label="Fabric preference" value={order.details.fabric} onChange={(v) => update('details', { fabric: v })} placeholder="e.g., Cashmere, Cotton, Aso-Oke, Lace" help="Or leave blank — we'll suggest options in the quote." />
+        <FieldText label="Color preference" value={order.details.color} onChange={(v) => update('details', { color: v })} placeholder="e.g., Navy, Cream, Burgundy" />
       </div>
-
-      {/* Occasion + Need by */}
       <div className="grid sm:grid-cols-2 gap-4">
-        <FieldText
-          label="Occasion"
-          value={order.details.occasion}
-          onChange={(v) => update('details', { occasion: v })}
-          placeholder="e.g., Wedding, Office, Owambe"
-        />
+        <FieldText label="Occasion" value={order.details.occasion} onChange={(v) => update('details', { occasion: v })} placeholder="e.g., Wedding, Office, Owambe" />
         <div>
           <label className="block text-xs uppercase tracking-[0.15em] text-stone-500 mb-2">Need by</label>
           <div className="relative">
-            <input
-              type="date"
-              value={order.details.needBy}
-              onChange={(e) => update('details', { needBy: e.target.value })}
-              className="w-full px-4 py-3 bg-white border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 transition"
-            />
+            <input type="date" value={order.details.needBy} onChange={(e) => update('details', { needBy: e.target.value })} className="w-full px-4 py-3 bg-white border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 transition" />
             <Calendar className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
         </div>
       </div>
-
-      {/* Notes */}
       <div>
         <label className="block text-xs uppercase tracking-[0.15em] text-stone-500 mb-2">Anything else?</label>
-        <textarea
-          value={order.details.notes}
-          onChange={(e) => update('details', { notes: e.target.value })}
-          placeholder="Anything we should know — allergies, preferences, special requests…"
-          rows={4}
-          className="w-full px-4 py-3 bg-white border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 transition resize-none"
-        />
+        <textarea value={order.details.notes} onChange={(e) => update('details', { notes: e.target.value })} placeholder="Anything we should know — allergies, preferences, special requests…" rows={4} className="w-full px-4 py-3 bg-white border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 transition resize-none" />
       </div>
     </div>
   </StepShell>
@@ -926,13 +868,7 @@ const DetailsStep = ({ order, update }) => (
 const FieldText = ({ label, value, onChange, placeholder, help }) => (
   <div>
     <label className="block text-xs uppercase tracking-[0.15em] text-stone-500 mb-2">{label}</label>
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 transition"
-    />
+    <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-4 py-3 bg-white border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 transition" />
     {help && <div className="text-xs text-stone-500 mt-1.5">{help}</div>}
   </div>
 );
@@ -948,51 +884,22 @@ const ContactStep = ({ order, update }) => (
     subtitle="We'll send your quote to your WhatsApp or phone within 24 hours."
   >
     <div className="space-y-5">
-      <FieldText
-        label="Full name *"
-        value={order.contact.name}
-        onChange={(v) => update('contact', { name: v })}
-        placeholder="Your name"
-      />
+      <FieldText label="Full name *" value={order.contact.name} onChange={(v) => update('contact', { name: v })} placeholder="Your name" />
       <div className="grid sm:grid-cols-2 gap-4">
-        <FieldText
-          label="WhatsApp number *"
-          value={order.contact.whatsapp}
-          onChange={(v) => update('contact', { whatsapp: v })}
-          placeholder="+234..."
-          help="We send quote and updates here."
-        />
-        <FieldText
-          label="Phone number"
-          value={order.contact.phone}
-          onChange={(v) => update('contact', { phone: v })}
-          placeholder="+234..."
-        />
+        <FieldText label="WhatsApp number *" value={order.contact.whatsapp} onChange={(v) => update('contact', { whatsapp: v })} placeholder="+234..." help="We send quote and updates here." />
+        <FieldText label="Phone number" value={order.contact.phone} onChange={(v) => update('contact', { phone: v })} placeholder="+234..." />
       </div>
-      <FieldText
-        label="Email (optional)"
-        value={order.contact.email}
-        onChange={(v) => update('contact', { email: v })}
-        placeholder="you@example.com"
-      />
-
-      {/* Delivery */}
+      <FieldText label="Email (optional)" value={order.contact.email} onChange={(v) => update('contact', { email: v })} placeholder="you@example.com" />
       <div>
         <label className="block text-xs uppercase tracking-[0.15em] text-stone-500 mb-3">Delivery</label>
         <div className="grid sm:grid-cols-2 gap-3">
           {[
-            { id: 'aba', label: 'Within Aba', sub: 'Free pickup or local delivery' },
+            { id: 'aba',     label: 'Within Aba',  sub: 'Free pickup or local delivery' },
             { id: 'nigeria', label: 'Outside Aba', sub: 'Nationwide shipping (cost in quote)' },
           ].map((d) => {
             const active = order.contact.delivery === d.id;
             return (
-              <button
-                key={d.id}
-                onClick={() => update('contact', { delivery: d.id })}
-                className={`p-4 rounded-sm border-2 text-left transition ${
-                  active ? 'border-emerald-700 bg-emerald-50/40' : 'border-stone-200 bg-white hover:border-stone-400'
-                }`}
-              >
+              <button key={d.id} onClick={() => update('contact', { delivery: d.id })} className={`p-4 rounded-sm border-2 text-left transition ${active ? 'border-emerald-700 bg-emerald-50/40' : 'border-stone-200 bg-white hover:border-stone-400'}`}>
                 <div className="font-medium text-sm text-stone-900">{d.label}</div>
                 <div className="text-xs text-stone-500 mt-1">{d.sub}</div>
               </button>
@@ -1000,7 +907,6 @@ const ContactStep = ({ order, update }) => (
           })}
         </div>
       </div>
-
       <div>
         <label className="block text-xs uppercase tracking-[0.15em] text-stone-500 mb-2">
           Delivery address {order.contact.delivery === 'nigeria' && <span className="text-red-700">*</span>}
@@ -1013,12 +919,9 @@ const ContactStep = ({ order, update }) => (
           className="w-full px-4 py-3 bg-white border border-stone-200 rounded-sm text-sm focus:outline-none focus:border-stone-900 transition resize-none"
         />
       </div>
-
       <div className="bg-stone-50 border border-stone-200 rounded-sm p-4 text-xs text-stone-600 leading-relaxed flex gap-3">
         <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" strokeWidth={1.5} />
-        <div>
-          Submitting this is <span className="font-medium text-stone-900">not a payment</span>. We review and send a quote first. You only pay when you accept it (50% deposit to start, balance on delivery).
-        </div>
+        <div>Submitting this is <span className="font-medium text-stone-900">not a payment</span>. We review and send a quote first. You only pay when you accept it (50% deposit to start, balance on delivery).</div>
       </div>
     </div>
   </StepShell>
@@ -1045,9 +948,24 @@ const ReviewStep = ({ order, category, setStepIndex, steps }) => {
           onEdit={() => setStepIndex(findStepIdx('style'))}
           value={
             <div className="space-y-2">
-              {order.style.selectedId && (
-                <div className="text-stone-900">{category.sampleStyles.find((s) => s.id === order.style.selectedId)?.name || '—'}</div>
-              )}
+              {/* CHANGE 6 — show real style image in the review card */}
+              {order.style.selectedId && (() => {
+                const sel = category.sampleStyles.find((s) => s.id === order.style.selectedId);
+                if (!sel) return null;
+                return (
+                  <div className="flex items-center gap-3">
+                    {sel.imageUrl && (
+                      <img
+                        src={sel.imageUrl}
+                        alt={sel.name}
+                        className="w-12 h-12 object-cover rounded-sm border border-stone-200 shrink-0"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    )}
+                    <div className="text-stone-900">{sel.name}</div>
+                  </div>
+                );
+              })()}
               {order.style.customImages.length > 0 && (
                 <div className="flex gap-1.5">
                   {order.style.customImages.map((img, i) => (
@@ -1087,11 +1005,11 @@ const ReviewStep = ({ order, category, setStepIndex, steps }) => {
           value={
             <div className="text-xs space-y-1 text-stone-600">
               <div>Fitting: <span className="text-stone-900 font-medium">{FITTING_PREFERENCES.find((f) => f.id === order.details.fitting)?.name}</span></div>
-              {order.details.fabric && <div>Fabric: <span className="text-stone-900">{order.details.fabric}</span></div>}
-              {order.details.color && <div>Color: <span className="text-stone-900">{order.details.color}</span></div>}
+              {order.details.fabric   && <div>Fabric:   <span className="text-stone-900">{order.details.fabric}</span></div>}
+              {order.details.color    && <div>Color:    <span className="text-stone-900">{order.details.color}</span></div>}
               {order.details.occasion && <div>Occasion: <span className="text-stone-900">{order.details.occasion}</span></div>}
-              {order.details.needBy && <div>Need by: <span className="text-stone-900">{order.details.needBy}</span></div>}
-              {order.details.notes && <div className="italic">"{order.details.notes}"</div>}
+              {order.details.needBy   && <div>Need by:  <span className="text-stone-900">{order.details.needBy}</span></div>}
+              {order.details.notes    && <div className="italic">"{order.details.notes}"</div>}
             </div>
           }
         />
@@ -1103,10 +1021,10 @@ const ReviewStep = ({ order, category, setStepIndex, steps }) => {
             <div className="text-xs space-y-1 text-stone-600">
               <div className="text-stone-900 font-medium">{order.contact.name}</div>
               {order.contact.whatsapp && <div>WhatsApp: <span className="text-stone-900">{order.contact.whatsapp}</span></div>}
-              {order.contact.phone && <div>Phone: <span className="text-stone-900">{order.contact.phone}</span></div>}
-              {order.contact.email && <div>Email: <span className="text-stone-900">{order.contact.email}</span></div>}
+              {order.contact.phone    && <div>Phone:    <span className="text-stone-900">{order.contact.phone}</span></div>}
+              {order.contact.email    && <div>Email:    <span className="text-stone-900">{order.contact.email}</span></div>}
               <div>Delivery: <span className="text-stone-900">{order.contact.delivery === 'aba' ? 'Within Aba' : 'Outside Aba'}</span></div>
-              {order.contact.address && <div className="italic">{order.contact.address}</div>}
+              {order.contact.address  && <div className="italic">{order.contact.address}</div>}
             </div>
           }
         />
@@ -1133,14 +1051,7 @@ const ReviewCard = ({ label, value, onEdit }) => (
       <div className="text-[10px] uppercase tracking-[0.18em] text-stone-500 mb-1.5">{label}</div>
       <div className="text-sm">{value || <span className="text-stone-400">Not set</span>}</div>
     </div>
-    {onEdit && (
-      <button
-        onClick={onEdit}
-        className="text-xs text-emerald-800 hover:text-emerald-900 font-medium shrink-0 hover:underline"
-      >
-        Edit
-      </button>
-    )}
+    {onEdit && <button onClick={onEdit} className="text-xs text-emerald-800 hover:text-emerald-900 font-medium shrink-0 hover:underline">Edit</button>}
   </div>
 );
 
@@ -1150,14 +1061,8 @@ const ReviewCard = ({ label, value, onEdit }) => (
 
 const SuccessScreen = ({ order, category }) => {
   const [copied, setCopied] = useState(false);
-  const copyRef = () => {
-    navigator.clipboard?.writeText(order.ref);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-  const waMessage = encodeURIComponent(
-    `Hello! I just submitted a custom order on ExploreAba.\n\nReference: ${order.ref}\nGarment: ${category.name}\nName: ${order.contact?.name || ''}`,
-  );
+  const copyRef = () => { navigator.clipboard?.writeText(order.ref); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const waMessage = encodeURIComponent(`Hello! I just submitted a custom order on ExploreAba.\n\nReference: ${order.ref}\nGarment: ${category.name}\nName: ${order.contact?.name || ''}`);
   return (
     <div className="min-h-screen bg-[#faf7f2] flex items-center justify-center px-5 py-20">
       <FontInjector />
@@ -1166,44 +1071,27 @@ const SuccessScreen = ({ order, category }) => {
           <Check className="w-10 h-10 text-emerald-800" strokeWidth={2} />
         </div>
         <div className="text-xs uppercase tracking-[0.2em] text-emerald-800 mb-3">Order received</div>
-        <h1 className="font-display text-5xl sm:text-6xl text-stone-900 leading-[0.95] mb-5">
-          We're on it.
-        </h1>
+        <h1 className="font-display text-5xl sm:text-6xl text-stone-900 leading-[0.95] mb-5">We're on it.</h1>
         <p className="text-lg text-stone-600 leading-relaxed mb-10 max-w-md mx-auto">
           A tailor will review your <span className="font-medium text-stone-900">{category.name}</span> order and send you a quote on WhatsApp within 24 hours.
         </p>
-
         <div className="bg-white border border-stone-200 rounded-sm p-6 mb-8 text-left max-w-md mx-auto">
           <div className="text-[10px] uppercase tracking-[0.18em] text-stone-500 mb-2">Reference number</div>
           <div className="flex items-center justify-between gap-3">
             <code className="font-display text-2xl text-stone-900 tabular-nums">{order.ref}</code>
-            <button
-              onClick={copyRef}
-              className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 rounded-sm text-xs font-medium flex items-center gap-1.5 transition"
-            >
+            <button onClick={copyRef} className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 rounded-sm text-xs font-medium flex items-center gap-1.5 transition">
               {copied ? <Check className="w-3 h-3 text-emerald-700" /> : <Copy className="w-3 h-3" />}
               {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
-          <div className="text-xs text-stone-500 mt-3">Save this — quote it when you reply.</div>
+          <div className="text-xs text-stone-500 mt-3">Save this — quote it when you reply on WhatsApp.</div>
         </div>
-
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href={`https://wa.me/${WHATSAPP_NUMBER}?text=${waMessage}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-7 py-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-medium transition"
-          >
-            <MessageCircle className="w-4 h-4" />
-            Open WhatsApp now
+          <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${waMessage}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-7 py-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-medium transition">
+            <MessageCircle className="w-4 h-4" /> Open WhatsApp now
           </a>
-          <Link
-            to="/custom"
-            className="inline-flex items-center justify-center gap-2 px-7 py-4 bg-white border border-stone-300 hover:bg-stone-50 rounded-full font-medium transition"
-          >
-            Back to categories
-            <ArrowRight className="w-4 h-4" />
+          <Link to="/custom" className="inline-flex items-center justify-center gap-2 px-7 py-4 bg-white border border-stone-300 hover:bg-stone-50 rounded-full font-medium transition">
+            Back to categories <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
@@ -1212,7 +1100,7 @@ const SuccessScreen = ({ order, category }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  STEP SHELL  ·  shared layout for every step
+//  STEP SHELL + HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
 const StepShell = ({ eyebrow, title, subtitle, children }) => (
@@ -1226,26 +1114,11 @@ const StepShell = ({ eyebrow, title, subtitle, children }) => (
   </div>
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-
-const generateReference = () => {
-  const d = new Date();
-  const date = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `EAB-CD-${date}-${rand}`;
-};
-
 const CategorySilhouette = ({ path, size = 100 }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
     <path d={path} />
   </svg>
 );
-
-// ───────────────────────────────────────────────────────────────────────────
-//  Font injector (shared with landing — duplicated so both can mount alone)
-// ───────────────────────────────────────────────────────────────────────────
 
 const FontInjector = () => {
   useEffect(() => {
