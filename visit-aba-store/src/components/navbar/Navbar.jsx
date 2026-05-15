@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import { useWishlist } from '../../context/WishlistContext'; // 👈 NEW
+import { useWishlist } from '../../context/WishlistContext';
 import {
-  Search, ShoppingCart, User, Menu, X, HelpCircle,
+  Search, ShoppingCart, User, X, HelpCircle,
   Phone, LogOut, AlertCircle, CheckCircle, ShieldCheck,
-  ChevronRight, Grid3X3, Heart // 👈 NEW: Imported Heart
+  ChevronRight, Grid3X3, Heart, Home, Package
 } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
 import CategoryMenu from '../navbar/CategoryMenu';
@@ -26,21 +26,31 @@ const checkAdminFromToken = () => {
   } catch { return false; }
 };
 
+/* ─── Bottom Nav Tab Definition ─────────────────────────────────────── */
+// Used only on mobile. Each tab either navigates or triggers an action.
+const BOTTOM_TABS = [
+  { id: 'home',       label: 'Home',       icon: Home,         to: '/' },
+  { id: 'categories', label: 'Categories', icon: Grid3X3,      to: null },   // opens sheet
+  { id: 'orders',     label: 'Orders',     icon: Package,      to: '/orders' },
+  { id: 'wishlist',   label: 'Saved',      icon: Heart,        to: '/wishlist' },
+  { id: 'account',    label: 'Account',    icon: User,         to: null },   // opens panel
+];
+
 const Navbar = () => {
   const { cartCount, cartTotal } = useCart();
-  const { wishlistCount } = useWishlist(); // 👈 NEW: Get wishlist count
+  const { wishlistCount } = useWishlist();
   const { categories, loading: categoriesLoading } = useCategories();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [isAccountOpen, setIsAccountOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen]         = useState(false);
+  const [isMobileAccountOpen, setIsMobileAccountOpen] = useState(false);
+  const [searchQuery, setSearchQuery]             = useState('');
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [scrolled, setScrolled]                   = useState(false);
+  const [isAdmin, setIsAdmin]                     = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -56,60 +66,71 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (!isCategorySheetOpen) {
-      document.body.style.overflow = isMobileMenuOpen ? 'hidden' : 'unset';
-    }
-    return () => { document.body.style.overflow = 'unset'; };
-  }, [isMobileMenuOpen, isCategorySheetOpen]);
+  // Close mobile account panel when route changes
+  useEffect(() => { setIsMobileAccountOpen(false); }, [location.pathname]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
       setIsMobileSearchOpen(false);
-      setIsMobileMenuOpen(false);
     }
   };
 
   const handleLogout = () => { logout(); navigate('/'); };
 
-  const openCategorySheet = () => {
-    setIsMobileMenuOpen(false); 
-    setTimeout(() => setIsCategorySheetOpen(true), 250);
+  const handleBottomTab = (tab) => {
+    if (tab.id === 'categories') {
+      setIsCategorySheetOpen(true);
+    } else if (tab.id === 'account') {
+      setIsMobileAccountOpen((v) => !v);
+    } else {
+      navigate(tab.to);
+    }
   };
+
+  /* Derive active bottom tab from current path */
+  const activeTab = (() => {
+    const p = location.pathname;
+    if (p === '/') return 'home';
+    if (p.startsWith('/orders')) return 'orders';
+    if (p.startsWith('/wishlist')) return 'wishlist';
+    if (p.startsWith('/account') || p.startsWith('/login') || p.startsWith('/signup')) return 'account';
+    return '';
+  })();
 
   return (
     <>
+      {/* ── ANNOUNCEMENT BAR ────────────────────────────────────────────── */}
       <div className="bg-gray-900 text-white text-[11px] font-bold py-2 tracking-wide border-b border-gray-800">
         <div className="max-w-[1440px] mx-auto px-4 flex justify-between items-center">
           <span className="hidden sm:inline opacity-80">Welcome to Nigeria's Premium Store</span>
           <div className="flex gap-6 mx-auto sm:mx-0 w-full justify-center sm:w-auto sm:justify-end">
-            <span> FREE SHIPPING ON ORDERS OVER ₦100,000</span>
+            <span>FREE SHIPPING ON ORDERS OVER ₦100,000</span>
             <span className="hidden sm:block opacity-60">|</span>
             <span className="hidden sm:flex items-center gap-1 opacity-80 hover:opacity-100 cursor-pointer">
               <Phone size={12} /> Enquiry: 07032220306
             </span>
-            <Link to="/custom" className="...">Custom</Link>
+            <Link to="/custom" className="hover:opacity-100 opacity-80 transition-opacity">Custom</Link>
           </div>
         </div>
       </div>
 
-      <nav className={`sticky top-0 z-40 transition-all duration-300 border-b border-gray-100 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-sm' : 'bg-white'}`}>
+      {/* ── MAIN NAV ────────────────────────────────────────────────────── */}
+      <nav
+        className={`sticky top-0 z-40 transition-all duration-300 border-b border-gray-100 ${
+          scrolled ? 'bg-white/90 backdrop-blur-xl shadow-sm' : 'bg-white'
+        }`}
+      >
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4 lg:gap-8">
 
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              className="lg:hidden p-2 -ml-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-full active:scale-95 transition-all"
-              onClick={() => setIsMobileMenuOpen(true)}
-            >
-              <Menu size={24} />
-            </button>
-
+          {/* ── LOGO ── always leftmost on all viewports ── */}
+          <div className="flex items-center shrink-0">
             <Link to="/" className="flex items-center gap-2 group">
               <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-green-700 text-white shadow-md transform group-hover:scale-105 transition-all duration-300">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                    d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                 </svg>
               </div>
               <div className="text-2xl font-black tracking-tighter">
@@ -120,6 +141,7 @@ const Navbar = () => {
             </Link>
           </div>
 
+          {/* ── DESKTOP: search + category dropdown ── */}
           <div className="hidden lg:flex flex-1 items-center gap-6 max-w-4xl mx-auto">
             <div className="shrink-0 relative z-50">
               {categoriesLoading ? (
@@ -141,31 +163,43 @@ const Navbar = () => {
                 <Search size={18} />
               </div>
               {searchQuery && (
-                <button type="button" onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-900 transition-colors">
+                <button type="button" onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-900 transition-colors">
                   <X size={16} />
                 </button>
               )}
             </form>
           </div>
 
+          {/* ── RIGHT ICONS ── */}
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
 
+            {/* Mobile search toggle */}
             <button
               className="lg:hidden p-2 text-gray-600 hover:bg-green-50 rounded-full active:scale-95 transition-all"
-              onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+              onClick={() => setIsMobileSearchOpen((v) => !v)}
+              aria-label="Search"
             >
-              <Search size={22} />
+              {isMobileSearchOpen ? <X size={22} /> : <Search size={22} />}
             </button>
 
+            {/* Desktop: Help */}
             <Link to="/support" className="hidden xl:flex flex-col items-center gap-0.5 text-gray-500 hover:text-green-600 transition-colors group">
               <HelpCircle size={20} className="group-hover:scale-110 transition-transform" />
               <span className="text-[10px] font-bold">Help</span>
             </Link>
 
-            <div className="hidden lg:block relative z-50" onMouseEnter={() => setIsAccountOpen(true)} onMouseLeave={() => setIsAccountOpen(false)}>
+            {/* Desktop: Account dropdown */}
+            <div
+              className="hidden lg:block relative z-50"
+              onMouseEnter={() => setIsAccountOpen(true)}
+              onMouseLeave={() => setIsAccountOpen(false)}
+            >
               <Link
                 to={isAuthenticated ? '/account' : '/login'}
-                className={`flex flex-col items-center gap-0.5 transition-colors ${isAuthenticated ? 'text-green-600' : 'text-gray-500 hover:text-green-600'}`}
+                className={`flex flex-col items-center gap-0.5 transition-colors ${
+                  isAuthenticated ? 'text-green-600' : 'text-gray-500 hover:text-green-600'
+                }`}
               >
                 {isAuthenticated && user?.firstName ? (
                   <div className="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-black text-[11px]">
@@ -179,7 +213,9 @@ const Navbar = () => {
                 </span>
               </Link>
 
-              <div className={`absolute right-0 top-full pt-4 w-64 transition-all duration-200 ${isAccountOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible translate-y-2'}`}>
+              <div className={`absolute right-0 top-full pt-4 w-64 transition-all duration-200 ${
+                isAccountOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible translate-y-2'
+              }`}>
                 <div className="bg-white border border-gray-100 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.12)] rounded-2xl overflow-hidden">
                   {isAuthenticated ? (
                     <div className="px-5 py-4 bg-gray-50/50 border-b border-gray-100">
@@ -195,7 +231,8 @@ const Navbar = () => {
                           <p className="text-[10px] text-orange-700 font-medium leading-tight">Add your address for faster checkout.</p>
                         </div>
                       )}
-                      <Link to="/account" className="block w-full bg-gray-900 text-white text-xs font-bold py-2 rounded-lg text-center hover:bg-gray-800 transition shadow-md">
+                      <Link to="/account"
+                        className="block w-full bg-gray-900 text-white text-xs font-bold py-2 rounded-lg text-center hover:bg-gray-800 transition shadow-md">
                         Manage Profile
                       </Link>
                     </div>
@@ -203,24 +240,35 @@ const Navbar = () => {
                     <div className="px-5 py-4 bg-gray-50/50 border-b border-gray-100">
                       <p className="text-xs text-gray-500 font-medium mb-2">Welcome!</p>
                       <div className="flex gap-2">
-                        <Link to="/login" state={{ from: location.pathname }} className="flex-1 bg-green-600 text-white text-xs font-bold py-2 rounded-lg text-center hover:bg-green-700 transition shadow-md shadow-green-200">Log In</Link>
-                        <Link to="/signup" className="flex-1 bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 rounded-lg text-center hover:bg-gray-50 transition">Sign Up</Link>
+                        <Link to="/login" state={{ from: location.pathname }}
+                          className="flex-1 bg-green-600 text-white text-xs font-bold py-2 rounded-lg text-center hover:bg-green-700 transition shadow-md shadow-green-200">
+                          Log In
+                        </Link>
+                        <Link to="/signup"
+                          className="flex-1 bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 rounded-lg text-center hover:bg-gray-50 transition">
+                          Sign Up
+                        </Link>
                       </div>
                     </div>
                   )}
 
                   <div className="py-2">
                     {isAdmin && (
-                      <Link to="/admin/products" className="flex items-center gap-2 px-5 py-2.5 text-sm text-green-700 font-bold bg-green-50/50 hover:bg-green-100 transition-colors border-b border-green-100 mb-1">
+                      <Link to="/admin/products"
+                        className="flex items-center gap-2 px-5 py-2.5 text-sm text-green-700 font-bold bg-green-50/50 hover:bg-green-100 transition-colors border-b border-green-100 mb-1">
                         <ShieldCheck size={16} /> Admin Portal
                       </Link>
                     )}
-                    <Link to="/orders" className="block px-5 py-2.5 text-sm text-gray-600 hover:bg-green-50 hover:text-green-700 font-medium transition-colors">📦 My Orders</Link>
+                    <Link to="/orders"
+                      className="block px-5 py-2.5 text-sm text-gray-600 hover:bg-green-50 hover:text-green-700 font-medium transition-colors">
+                      📦 My Orders
+                    </Link>
                   </div>
 
                   {isAuthenticated && (
                     <div className="border-t border-gray-100 py-1">
-                      <button onClick={handleLogout} className="w-full text-left px-5 py-2.5 text-sm text-red-500 hover:bg-red-50 hover:text-red-600 font-medium transition-colors flex items-center gap-2">
+                      <button onClick={handleLogout}
+                        className="w-full text-left px-5 py-2.5 text-sm text-red-500 hover:bg-red-50 hover:text-red-600 font-medium transition-colors flex items-center gap-2">
                         <LogOut size={16} /> Log Out
                       </button>
                     </div>
@@ -229,10 +277,10 @@ const Navbar = () => {
               </div>
             </div>
 
-            {/* 👈 NEW: Wishlist Icon (Always visible next to cart) */}
+            {/* Wishlist — visible on desktop; hidden on mobile (in bottom nav) */}
             <Link
               to="/wishlist"
-              className="flex items-center justify-center w-10 h-10 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:border-red-200 hover:text-red-500 rounded-full transition-all group ml-1 shadow-sm relative"
+              className="hidden lg:flex items-center justify-center w-10 h-10 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:border-red-200 rounded-full transition-all group ml-1 shadow-sm relative"
             >
               <Heart size={18} className="text-gray-600 group-hover:text-red-500 transition-colors" />
               {wishlistCount > 0 && (
@@ -255,12 +303,17 @@ const Navbar = () => {
                   </span>
                 )}
               </div>
-              <span className="text-sm font-bold hidden sm:block">₦{cartTotal ? cartTotal.toLocaleString() : '0'}</span>
+              <span className="text-sm font-bold hidden sm:block">
+                ₦{cartTotal ? cartTotal.toLocaleString() : '0'}
+              </span>
             </Link>
           </div>
         </div>
 
-        <div className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${isMobileSearchOpen ? 'max-h-20 border-t border-gray-100' : 'max-h-0'}`}>
+        {/* ── MOBILE SEARCH DRAWER ── */}
+        <div className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+          isMobileSearchOpen ? 'max-h-20 border-t border-gray-100' : 'max-h-0'
+        }`}>
           <div className="p-3 bg-gray-50">
             <form onSubmit={handleSearch} className="relative">
               <input
@@ -277,116 +330,173 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* ── MOBILE DRAWER OVERLAY ───────────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════
+          MOBILE ACCOUNT SLIDE-UP PANEL
+          Triggered by tapping the Account tab in the bottom nav.
+      ══════════════════════════════════════════════════════════════════ */}
+      {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 lg:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}
-        onClick={() => setIsMobileMenuOpen(false)}
+        className={`lg:hidden fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${
+          isMobileAccountOpen ? 'opacity-100 visible' : 'opacity-0 invisible'
+        }`}
+        onClick={() => setIsMobileAccountOpen(false)}
         aria-hidden="true"
       />
 
-      {/* ── MOBILE DRAWER PANEL ─────────────────────────────────────────── */}
+      {/* Panel */}
       <div
-        className={`fixed inset-y-0 left-0 w-[85vw] max-w-sm bg-white z-50 lg:hidden shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl transform transition-transform duration-300 ease-out ${
+          isMobileAccountOpen ? 'translate-y-0' : 'translate-y-full'
+        }`}
+        style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}
       >
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-green-700 text-white shadow-sm">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-            </div>
-            <div className="text-xl font-black tracking-tighter">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-700 to-emerald-500">Explore</span>
-              <span className="text-gray-900">Aba</span>
-              <span className="text-emerald-500">.</span>
-            </div>
-          </div>
-          <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors">
-            <X size={20} />
-          </button>
+        {/* Handle bar */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-gray-200 rounded-full" />
         </div>
 
-        <div className="flex-1 overflow-y-auto py-4">
-
-          <div className="px-4 mb-5">
-            {isAuthenticated ? (
-              <div className="bg-green-50 rounded-xl p-4 flex items-center gap-3 border border-green-100">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-green-700 text-white flex items-center justify-center font-black text-lg shrink-0">
+        <div className="px-5 pt-2 pb-4">
+          {isAuthenticated ? (
+            <>
+              {/* Authenticated header */}
+              <div className="flex items-center gap-3 p-4 bg-green-50 rounded-2xl border border-green-100 mb-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-green-700 text-white flex items-center justify-center font-black text-xl shrink-0">
                   {user?.firstName?.charAt(0).toUpperCase() || 'U'}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">Hi, {user?.firstName}</p>
-                  <Link to="/account" onClick={() => setIsMobileMenuOpen(false)} className="text-xs text-green-600 font-medium hover:underline">View Profile</Link>
+                  <p className="font-bold text-gray-900">Hi, {user?.firstName}</p>
+                  <p className="text-xs text-gray-500">{user?.email || ''}</p>
                 </div>
               </div>
-            ) : (
-              <div className="flex gap-3">
-                <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="flex-1 bg-green-600 text-white text-sm font-bold py-2.5 rounded-xl text-center shadow-md">Log In</Link>
-                <Link to="/signup" onClick={() => setIsMobileMenuOpen(false)} className="flex-1 bg-white border border-gray-200 text-gray-900 text-sm font-bold py-2.5 rounded-xl text-center">Sign Up</Link>
+
+              {user?.defaultAddress ? (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-xl mb-4">
+                  <CheckCircle size={14} className="text-green-500 shrink-0" />
+                  <p className="text-xs text-green-800 font-medium">Ready for fast checkout!</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-100 rounded-xl mb-4">
+                  <AlertCircle size={14} className="text-orange-500 shrink-0" />
+                  <p className="text-xs text-orange-700 font-medium">Add your address for faster checkout.</p>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                {isAdmin && (
+                  <Link to="/admin/products" onClick={() => setIsMobileAccountOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-green-700 bg-green-50 rounded-xl font-bold">
+                    <ShieldCheck size={18} /> Admin Portal
+                  </Link>
+                )}
+                <Link to="/account" onClick={() => setIsMobileAccountOpen(false)}
+                  className="flex items-center justify-between px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors font-medium">
+                  <span className="flex items-center gap-3"><User size={18} className="text-gray-400" /> Manage Profile</span>
+                  <ChevronRight size={16} className="text-gray-300" />
+                </Link>
               </div>
-            )}
-          </div>
 
-          <div className="px-4 mb-4">
-            <button
-              onClick={openCategorySheet}
-              className="w-full flex items-center gap-3 px-4 py-4 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-2xl shadow-lg shadow-green-200 active:scale-[0.98] transition-all"
-            >
-              <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-                <Grid3X3 size={18} className="text-white" />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-black">Browse All Categories</p>
-                <p className="text-[10px] text-white/70 font-medium">
-                  {Array.isArray(categories) ? `${categories.length} categories` : 'Explore everything'}
-                </p>
-              </div>
-              <ChevronRight size={18} className="text-white/70" />
-            </button>
-          </div>
-
-          <div className="px-2">
-            <p className="px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 mt-2">My Account</p>
-
-            {isAdmin && (
-              <Link to="/admin/products" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 mx-2 px-4 py-3 text-green-700 bg-green-50 rounded-xl mb-1 font-bold">
-                <ShieldCheck size={18} /> Admin Portal
-              </Link>
-            )}
-
-            {[
-              { to: '/orders', icon: <ShoppingCart size={18} className="text-gray-400" />, label: 'My Orders' },
-              { to: '/wishlist', icon: <Heart size={18} className="text-red-400" />, label: 'Saved Items', badge: wishlistCount }, // 👈 Updated icon and added badge
-              { to: '/support', icon: <HelpCircle size={18} className="text-gray-400" />, label: 'Help & Support' },
-            ].map(({ to, icon, label, badge }) => (
-              <Link
-                key={to}
-                to={to}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center justify-between px-4 py-3 mx-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+              <button
+                onClick={() => { handleLogout(); setIsMobileAccountOpen(false); }}
+                className="w-full mt-4 flex items-center justify-center gap-2 py-3 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-bold transition-colors"
               >
-                <div className="flex items-center gap-3 font-medium">
-                  {icon} {label} 
-                  {badge > 0 && <span className="bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">{badge}</span>}
-                </div>
+                <LogOut size={18} /> Log Out
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-lg font-black text-gray-900 mb-1">My Account</p>
+              <p className="text-sm text-gray-500 mb-5">Sign in to access your orders, wishlist and more.</p>
+              <div className="flex gap-3 mb-4">
+                <Link to="/login" state={{ from: location.pathname }}
+                  onClick={() => setIsMobileAccountOpen(false)}
+                  className="flex-1 bg-green-600 text-white text-sm font-bold py-3 rounded-xl text-center shadow-md shadow-green-200">
+                  Log In
+                </Link>
+                <Link to="/signup"
+                  onClick={() => setIsMobileAccountOpen(false)}
+                  className="flex-1 bg-white border-2 border-gray-200 text-gray-900 text-sm font-bold py-3 rounded-xl text-center">
+                  Sign Up
+                </Link>
+              </div>
+              <Link to="/support" onClick={() => setIsMobileAccountOpen(false)}
+                className="flex items-center justify-between px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors">
+                <span className="flex items-center gap-3 font-medium"><HelpCircle size={18} className="text-gray-400" /> Help & Support</span>
                 <ChevronRight size={16} className="text-gray-300" />
               </Link>
-            ))}
-          </div>
+            </>
+          )}
         </div>
-
-        {isAuthenticated && (
-          <div className="p-4 border-t border-gray-100 bg-gray-50 shrink-0">
-            <button
-              onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
-              className="w-full flex items-center justify-center gap-2 py-3 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-bold transition-colors"
-            >
-              <LogOut size={18} /> Log Out
-            </button>
-          </div>
-        )}
       </div>
 
+      {/* ══════════════════════════════════════════════════════════════════
+          MOBILE BOTTOM NAV BAR
+          Fixed to the bottom, always visible on mobile/tablet.
+          Hidden on lg+ (desktop uses the top nav).
+      ══════════════════════════════════════════════════════════════════ */}
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-gray-100 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.08)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="flex items-stretch h-[62px]">
+          {BOTTOM_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            const isCurrent = tab.to && location.pathname === tab.to;
+
+            // Badge logic
+            const badge =
+              tab.id === 'wishlist' && wishlistCount > 0 ? wishlistCount :
+              tab.id === 'orders'   && cartCount > 0     ? cartCount      : 0;
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleBottomTab(tab)}
+                className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-95 ${
+                  isActive || (tab.id === 'account' && isMobileAccountOpen)
+                    ? 'text-green-600'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {/* Active indicator pill */}
+                {(isActive || (tab.id === 'account' && isMobileAccountOpen)) && (
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-green-500 rounded-full" />
+                )}
+
+                <div className="relative">
+                  <Icon
+                    size={22}
+                    strokeWidth={isActive || (tab.id === 'account' && isMobileAccountOpen) ? 2.5 : 1.8}
+                    className={`transition-all duration-200 ${
+                      tab.id === 'wishlist' && (isActive || wishlistCount > 0) ? 'text-red-500' : ''
+                    }`}
+                    fill={
+                      tab.id === 'wishlist' && wishlistCount > 0
+                        ? 'currentColor'
+                        : (isActive || (tab.id === 'account' && isMobileAccountOpen))
+                          ? 'none'
+                          : 'none'
+                    }
+                  />
+                  {badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2 bg-green-600 text-white text-[8px] font-black min-w-[14px] h-[14px] px-0.5 flex items-center justify-center rounded-full border border-white">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
+                </div>
+
+                <span className={`text-[10px] font-bold leading-none ${
+                  tab.id === 'wishlist' && (isActive || wishlistCount > 0) ? 'text-red-500' : ''
+                }`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* ── MOBILE CATEGORY SHEET ── */}
       <MobileCategorySheet
         categories={categories}
         isOpen={isCategorySheetOpen}

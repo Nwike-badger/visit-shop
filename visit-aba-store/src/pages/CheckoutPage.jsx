@@ -10,7 +10,7 @@ import AddressForm from '../components/AddressForm';
 
 const CheckoutPage = () => {
   const { cartItems, cartTotal, refreshCart } = useCart();
-  const { user, isAuthenticated, loading: authLoading, login } = useAuth();
+  const { user, isAuthenticated, loading: authLoading, login, updateUser } = useAuth(); // 👈 added updateUser
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
@@ -68,6 +68,19 @@ const CheckoutPage = () => {
     }
   };
 
+  // ── Save the address entered during checkout to the user's profile ──────────
+  // Only called when the user typed a new address (hasSavedAddress === false).
+  // Runs silently — a failure here should NOT block the order.
+  const trySaveCheckoutAddress = async () => {
+    try {
+      const res = await api.put('/v1/users/me/address', { address });
+      if (updateUser) updateUser(res.data); // sync global auth state
+    } catch (err) {
+      // Non-fatal: address save failed, but we still proceed with the order.
+      console.warn('Could not auto-save checkout address:', err);
+    }
+  };
+
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -80,6 +93,11 @@ const CheckoutPage = () => {
       );
       setLoading(false);
       return;
+    }
+
+    // ── Auto-save address if the user filled it in here and has no saved one ──
+    if (!hasSavedAddress) {
+      await trySaveCheckoutAddress();
     }
 
     const orderRequest = {
@@ -99,7 +117,7 @@ const CheckoutPage = () => {
 
       const paymentRes = await api.post(`/v1/payments/init/${order.orderId}`);
       const checkoutUrl = paymentRes.data?.checkoutUrl;
-      
+
       if (!checkoutUrl) {
         throw new Error(`No checkout URL returned.`);
       }
@@ -176,7 +194,7 @@ const CheckoutPage = () => {
 
           {/* ── LEFT COLUMN: Auth & Address ─────────────────────────────────── */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-8">
-            
+
             {!isAuthenticated ? (
               /* Auth Block */
               <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-sm border border-gray-100">
@@ -184,7 +202,7 @@ const CheckoutPage = () => {
                   <h2 className="text-2xl font-black text-gray-900 tracking-tight">Account Details</h2>
                   <p className="text-sm font-medium text-gray-500 mt-1">Sign in or create an account to secure your order.</p>
                 </div>
-                
+
                 <div className="max-w-md">
                   <div className="mb-8">
                     <GoogleLogin
@@ -193,25 +211,25 @@ const CheckoutPage = () => {
                       useOneTap shape="rectangular" size="large" text="continue_with" width="100%"
                     />
                   </div>
-                  
+
                   <div className="relative flex items-center mb-8">
                     <div className="flex-grow border-t border-gray-100" />
                     <span className="flex-shrink-0 mx-4 text-gray-400 text-[10px] font-black uppercase tracking-widest">OR CONTINUE WITH EMAIL</span>
                     <div className="flex-grow border-t border-gray-100" />
                   </div>
-                  
+
                   {/* Custom Toggle Switch */}
                   <div className="flex bg-gray-100 p-1.5 rounded-xl mb-8">
-                    <button 
+                    <button
                       type="button"
-                      onClick={() => setAuthMode('login')} 
+                      onClick={() => setAuthMode('login')}
                       className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${authMode === 'login' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                       Log In
                     </button>
-                    <button 
+                    <button
                       type="button"
-                      onClick={() => setAuthMode('signup')} 
+                      onClick={() => setAuthMode('signup')}
                       className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${authMode === 'signup' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                       Create Account
@@ -239,7 +257,7 @@ const CheckoutPage = () => {
                       <label className="block text-sm font-bold text-gray-900 mb-1.5">Password</label>
                       <input required type="password" name="password" minLength={6} onChange={handleAuthChange} disabled={loading} className="w-full p-3.5 border border-gray-300 rounded-xl outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-50 transition-all font-medium text-gray-900" />
                     </div>
-                    
+
                     <button disabled={loading} className="w-full bg-gray-900 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest mt-4 hover:bg-black transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
                       {loading ? 'Authenticating...' : authMode === 'login' ? 'Log In to Continue' : 'Create Account & Continue'}
                     </button>
@@ -271,6 +289,12 @@ const CheckoutPage = () => {
                       <p className="pt-2">{address.streetAddress}</p>
                       <p>{address.city}, {address.state}</p>
                     </div>
+                    {/* 
+                      "Use a different address" — sets hasSavedAddress to false so the
+                      user can type a new one, but we intentionally do NOT auto-save
+                      that new address (the save only happens on order submission when
+                      hasSavedAddress is false AND the address fields are brand new).
+                    */}
                     <button type="button" onClick={() => setHasSavedAddress(false)} className="text-sm font-bold text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 px-5 py-2.5 rounded-xl transition-colors shadow-sm">
                       Use a different address
                     </button>
@@ -286,7 +310,7 @@ const CheckoutPage = () => {
           <div className="lg:col-span-5 xl:col-span-4">
             <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-lg border border-gray-100 sticky top-28">
               <h2 className="text-xl font-black text-gray-900 mb-6 tracking-tight border-b border-gray-100 pb-4">Order Summary</h2>
-              
+
               {/* Receipt Items */}
               <div className="space-y-5 mb-6 max-h-[35vh] overflow-y-auto pr-2 custom-scrollbar">
                 {cartItems.map((item, index) => (
@@ -301,7 +325,7 @@ const CheckoutPage = () => {
                   </div>
                 ))}
               </div>
-              
+
               {/* Receipt Totals */}
               <div className="space-y-4 border-t border-gray-100 pt-6 mb-6 text-sm font-medium text-gray-600">
                 <div className="flex justify-between items-center">
@@ -313,12 +337,12 @@ const CheckoutPage = () => {
                   <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs font-black uppercase tracking-widest">Free</span>
                 </div>
               </div>
-              
+
               <div className="border-t border-gray-900 pt-6 mb-8 flex justify-between items-end">
                 <span className="text-gray-900 font-bold uppercase tracking-widest text-sm">Total to Pay</span>
                 <span className="text-3xl font-black text-gray-900 tracking-tight">₦{cartTotal.toLocaleString()}</span>
               </div>
-              
+
               {/* The Grand Conversion Button */}
               <button
                 type="button"
@@ -340,7 +364,7 @@ const CheckoutPage = () => {
                   <><CreditCard size={18} /> Pay</>
                 )}
               </button>
-              
+
               {/* Trust Badges */}
               <div className="mt-6 flex flex-col items-center justify-center gap-2 text-xs font-bold text-gray-400">
                  <div className="flex items-center gap-1.5"><ShieldCheck size={16} className="text-green-500" /> 100% Encrypted Payment via Monnify</div>
