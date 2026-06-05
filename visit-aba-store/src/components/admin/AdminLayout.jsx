@@ -8,7 +8,7 @@ const AdminLayout = () => {
       <div className="flex flex-col md:flex-row gap-8 items-start">
         
         {/* SIDEBAR NAVIGATION */}
-        <aside className="w-full md:w-64 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-24">
+        <aside className="w-full md:w-64 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden md:sticky md:top-24">
           <div className="p-6 bg-slate-900 text-white">
             <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
               <Settings size={16} /> Admin Portal

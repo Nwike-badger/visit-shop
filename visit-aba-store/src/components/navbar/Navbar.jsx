@@ -6,7 +6,7 @@ import { useWishlist } from '../../context/WishlistContext';
 import {
   Search, ShoppingCart, User, X, HelpCircle,
   Phone, LogOut, AlertCircle, CheckCircle, ShieldCheck,
-  ChevronRight, Grid3X3, Heart, Home, Package
+  ChevronRight, Grid3X3, Heart, Home, Package, Scissors
 } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
 import CategoryMenu from '../navbar/CategoryMenu';
@@ -29,11 +29,11 @@ const checkAdminFromToken = () => {
 /* ─── Bottom Nav Tab Definition ─────────────────────────────────────── */
 // Used only on mobile. Each tab either navigates or triggers an action.
 const BOTTOM_TABS = [
-  { id: 'home',       label: 'Home',       icon: Home,         to: '/' },
-  { id: 'categories', label: 'Categories', icon: Grid3X3,      to: null },   // opens sheet
-  { id: 'orders',     label: 'Orders',     icon: Package,      to: '/orders' },
-  { id: 'wishlist',   label: 'Saved',      icon: Heart,        to: '/wishlist' },
-  { id: 'account',    label: 'Account',    icon: User,         to: null },   // opens panel
+  { id: 'home',       label: 'Home',       icon: Home,     to: '/' },
+  { id: 'categories', label: 'Categories', icon: Grid3X3,  to: null },     // opens sheet
+  { id: 'custom',     label: 'Custom',     icon: Scissors, to: '/custom' }, // highlighted hero (center)
+  { id: 'orders',     label: 'Orders',     icon: Package,  to: '/orders' },
+  { id: 'account',    label: 'Account',    icon: User,     to: null },      // opens panel
 ];
 
 const Navbar = () => {
@@ -93,8 +93,8 @@ const Navbar = () => {
   const activeTab = (() => {
     const p = location.pathname;
     if (p === '/') return 'home';
+    if (p.startsWith('/custom')) return 'custom';
     if (p.startsWith('/orders')) return 'orders';
-    if (p.startsWith('/wishlist')) return 'wishlist';
     if (p.startsWith('/account') || p.startsWith('/login') || p.startsWith('/signup')) return 'account';
     return '';
   })();
@@ -277,10 +277,10 @@ const Navbar = () => {
               </div>
             </div>
 
-            {/* Wishlist — visible on desktop; hidden on mobile (in bottom nav) */}
+            {/* Wishlist — now visible on ALL viewports (top-right cluster) */}
             <Link
               to="/wishlist"
-              className="hidden lg:flex items-center justify-center w-10 h-10 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:border-red-200 rounded-full transition-all group ml-1 shadow-sm relative"
+              className="flex items-center justify-center w-10 h-10 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:border-red-200 rounded-full transition-all group ml-1 shadow-sm relative"
             >
               <Heart size={18} className="text-gray-600 group-hover:text-red-500 transition-colors" />
               {wishlistCount > 0 && (
@@ -441,42 +441,46 @@ const Navbar = () => {
           {BOTTOM_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
-            const isCurrent = tab.to && location.pathname === tab.to;
+            const isAccountActive = tab.id === 'account' && isMobileAccountOpen;
+            const badge = tab.id === 'orders' && cartCount > 0 ? cartCount : 0;
 
-            // Badge logic
-            const badge =
-              tab.id === 'wishlist' && wishlistCount > 0 ? wishlistCount :
-              tab.id === 'orders'   && cartCount > 0     ? cartCount      : 0;
+            /* ── Highlighted center "Custom" tab — the hero action ── */
+            if (tab.id === 'custom') {
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleBottomTab(tab)}
+                  className="relative flex-1 flex flex-col items-center justify-end pb-1.5 gap-1 active:scale-95 transition-transform"
+                  aria-label="Custom"
+                >
+                  <div className={`-mt-6 w-12 h-12 rounded-full flex items-center justify-center text-white border-4 border-white shadow-lg shadow-green-600/30 transition-colors ${
+                    isActive ? 'bg-green-700' : 'bg-green-600'
+                  }`}>
+                    <Icon size={20} strokeWidth={2.2} />
+                  </div>
+                  <span className="text-[10px] font-bold leading-none text-green-600">Custom</span>
+                </button>
+              );
+            }
 
+            /* ── Standard tabs ── */
             return (
               <button
                 key={tab.id}
                 onClick={() => handleBottomTab(tab)}
                 className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-95 ${
-                  isActive || (tab.id === 'account' && isMobileAccountOpen)
-                    ? 'text-green-600'
-                    : 'text-gray-400 hover:text-gray-600'
+                  isActive || isAccountActive ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-                {/* Active indicator pill */}
-                {(isActive || (tab.id === 'account' && isMobileAccountOpen)) && (
+                {(isActive || isAccountActive) && (
                   <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-green-500 rounded-full" />
                 )}
 
                 <div className="relative">
                   <Icon
                     size={22}
-                    strokeWidth={isActive || (tab.id === 'account' && isMobileAccountOpen) ? 2.5 : 1.8}
-                    className={`transition-all duration-200 ${
-                      tab.id === 'wishlist' && (isActive || wishlistCount > 0) ? 'text-red-500' : ''
-                    }`}
-                    fill={
-                      tab.id === 'wishlist' && wishlistCount > 0
-                        ? 'currentColor'
-                        : (isActive || (tab.id === 'account' && isMobileAccountOpen))
-                          ? 'none'
-                          : 'none'
-                    }
+                    strokeWidth={isActive || isAccountActive ? 2.5 : 1.8}
+                    className="transition-all duration-200"
                   />
                   {badge > 0 && (
                     <span className="absolute -top-1.5 -right-2 bg-green-600 text-white text-[8px] font-black min-w-[14px] h-[14px] px-0.5 flex items-center justify-center rounded-full border border-white">
@@ -485,11 +489,7 @@ const Navbar = () => {
                   )}
                 </div>
 
-                <span className={`text-[10px] font-bold leading-none ${
-                  tab.id === 'wishlist' && (isActive || wishlistCount > 0) ? 'text-red-500' : ''
-                }`}>
-                  {tab.label}
-                </span>
+                <span className="text-[10px] font-bold leading-none">{tab.label}</span>
               </button>
             );
           })}
