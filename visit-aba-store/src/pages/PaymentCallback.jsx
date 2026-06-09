@@ -17,7 +17,7 @@ const PaymentCallback = () => {
   const [attemptCount, setAttemptCount] = useState(0);
   const timerRef = useRef(null);
 
-  const orderId = searchParams.get('paymentReference');
+  const orderId = searchParams.get('reference') || searchParams.get('paymentReference');
   const monnifyStatus = searchParams.get('paymentStatus'); 
   const transactionRef = searchParams.get('transactionReference');
 
