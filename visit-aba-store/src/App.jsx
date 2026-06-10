@@ -62,6 +62,7 @@ function App() {
                     <Route path="/signup" element={<SignupPage />} />
                     <Route path="/search" element={<SearchResults />} />
                     <Route path="/custom" element={<CustomDesignPage />} />
+                    <Route path="/payment/callback" element={<PaymentCallback />} />
                     <Route path="/custom/order/:categoryId" element={<CustomDesignerWizard />} />
 
                     <Route element={<ProtectedRoute />}>
