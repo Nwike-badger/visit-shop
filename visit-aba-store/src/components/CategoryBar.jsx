@@ -4,26 +4,16 @@ import { Layers } from 'lucide-react';
 import { useCategories } from '../hooks/useCategories';
 import api from '../api/axiosConfig';
 
-// ─── Config helpers (shared with CategoryBarSettings) ────────────────────────
+// ─── Legacy exports (kept so existing imports don't break) ───────────────────
+// The server is now the source of truth; these are no longer used for state.
 export const CAT_BAR_CONFIG_KEY = 'waylchub_cat_bar_config';
-
 export const defaultCatBarConfig = () => ({
-  parentSlug:     null,
-  order:          [],
-  imageOverrides: {},
-  hiddenSlugs:    [],
+  parentSlug: null, mode: 'PARENT', depth: null,
+  order: [], imageOverrides: {}, hiddenSlugs: [],
 });
+export const loadCatBarConfig = () => defaultCatBarConfig();
 
-export const loadCatBarConfig = () => {
-  try {
-    const raw = localStorage.getItem(CAT_BAR_CONFIG_KEY);
-    return raw ? { ...defaultCatBarConfig(), ...JSON.parse(raw) } : defaultCatBarConfig();
-  } catch {
-    return defaultCatBarConfig();
-  }
-};
-
-// ─── Find a node anywhere in the tree ────────────────────────────────────────
+// ─── Tree helpers ─────────────────────────────────────────────────────────────
 const findNodeBySlug = (nodes, slug) => {
   for (const n of nodes) {
     if (n.slug === slug) return n;
@@ -35,8 +25,6 @@ const findNodeBySlug = (nodes, slug) => {
   return null;
 };
 
-// ─── Collect all LEAF categories (no children) anywhere in the tree ──────────
-// These are the categories "closest to the product" — gathered across ALL roots.
 const collectLeaves = (nodes, out = []) => {
   for (const n of nodes) {
     if (n.children?.length) collectLeaves(n.children, out);
@@ -45,8 +33,6 @@ const collectLeaves = (nodes, out = []) => {
   return out;
 };
 
-// ─── Collect all categories at an exact depth ────────────────────────────────
-// depth 0 = roots, 1 = their children, 2 = grandchildren, etc.
 const collectAtDepth = (nodes, targetDepth, currentDepth = 0, out = []) => {
   for (const n of nodes) {
     if (currentDepth === targetDepth) out.push(n);
@@ -98,84 +84,62 @@ const CategoryItem = ({ category, index, imageOverride }) => {
 // ─── Main Component ───────────────────────────────────────────────────────────
 const CategoryBar = () => {
   const { categories: allCategories, loading } = useCategories();
-  const [config, setConfig] = useState(loadCatBarConfig);
 
-  // Server config drives how the bar is populated. undefined = not yet loaded.
-  // Shape: { parentSlug, mode, depth }
+  // Entire config now comes from the server. undefined = not yet loaded.
+  // Shape: { parentSlug, mode, depth, order, hidden, imageOverrides }
   const [serverConfig, setServerConfig] = useState(undefined);
 
-  // Fetch authoritative cat-bar config from backend on mount
   useEffect(() => {
     api.get('/v1/config/cat-bar')
       .then(res => {
         setServerConfig({
-          parentSlug: res.data?.catBarParentSlug ?? null,
-          mode:       res.data?.catBarMode ?? 'PARENT',
-          depth:      res.data?.catBarDepth ?? null,
+          parentSlug:     res.data?.catBarParentSlug ?? null,
+          mode:           res.data?.catBarMode ?? 'PARENT',
+          depth:          res.data?.catBarDepth ?? null,
+          order:          res.data?.catBarOrder ?? [],
+          hidden:         res.data?.catBarHidden ?? [],
+          imageOverrides: res.data?.catBarImageOverrides ?? {},
         });
-        // Keep localStorage parentSlug in sync as a fast cache on next visit
-        setConfig(prev => ({ ...prev, parentSlug: res.data?.catBarParentSlug ?? null }));
       })
       .catch(() => {
-        // Fall back to localStorage silently on network error (PARENT mode)
-        setServerConfig({
-          parentSlug: loadCatBarConfig().parentSlug ?? null,
-          mode:       'PARENT',
-          depth:      null,
-        });
+        // Safe default on error: root categories, no curation
+        setServerConfig({ parentSlug: null, mode: 'PARENT', depth: null, order: [], hidden: [], imageOverrides: {} });
       });
-  }, []);
-
-  // Re-read order/hidden/imageOverrides from localStorage when admin saves
-  useEffect(() => {
-    const handler = () => setConfig(loadCatBarConfig());
-    window.addEventListener('cat_bar_config_updated', handler);
-    return () => window.removeEventListener('cat_bar_config_updated', handler);
   }, []);
 
   const categories = useMemo(() => {
     if (!Array.isArray(allCategories) || serverConfig === undefined) return [];
 
-    const { parentSlug, mode, depth } = serverConfig;
+    const { parentSlug, mode, depth, order, hidden } = serverConfig;
     let pool;
 
     if (mode === 'LEAVES') {
-      // Bottom-level categories from across the whole tree (closest to product)
       pool = collectLeaves(allCategories);
     } else if (mode === 'DEPTH') {
-      // Everything at an exact depth (0 = roots, 1 = their children, ...)
       pool = collectAtDepth(allCategories, depth ?? 1);
     } else {
-      // PARENT mode (default): direct children of the configured parent,
-      // or root categories when no parent is set.
+      // PARENT
       if (!parentSlug) {
-        pool = allCategories.filter(
-          (cat) => !cat.parent && !cat.parentId && !cat.parentSlug,
-        );
+        pool = allCategories.filter(c => !c.parent && !c.parentId && !c.parentSlug);
       } else {
         const parent = findNodeBySlug(allCategories, parentSlug);
         pool = parent?.children ?? [];
       }
     }
 
-    // Remove admin-hidden slugs
-    const hidden = new Set(config.hiddenSlugs ?? []);
-    pool = pool.filter((c) => !hidden.has(c.slug));
+    // Hidden
+    const hiddenSet = new Set(hidden ?? []);
+    pool = pool.filter(c => !hiddenSet.has(c.slug));
 
-    // Apply explicit ordering (pinned slugs first, unlisted follow)
-    if ((config.order ?? []).length > 0) {
-      const orderMap = new Map(config.order.map((slug, i) => [slug, i]));
-      pool = [...pool].sort((a, b) => {
-        const ai = orderMap.has(a.slug) ? orderMap.get(a.slug) : 9999;
-        const bi = orderMap.has(b.slug) ? orderMap.get(b.slug) : 9999;
-        return ai - bi;
-      });
+    // Ordering (pinned-first, unlisted follow)
+    if ((order ?? []).length > 0) {
+      const orderMap = new Map(order.map((slug, i) => [slug, i]));
+      pool = [...pool].sort((a, b) => (orderMap.get(a.slug) ?? 9999) - (orderMap.get(b.slug) ?? 9999));
     }
 
     return pool;
-  }, [allCategories, config, serverConfig]);
+  }, [allCategories, serverConfig]);
 
-  // Show skeleton while categories are loading OR server config hasn't arrived yet
   if (loading || serverConfig === undefined) {
     return (
       <div className="bg-white border-b border-gray-100 mb-3 sm:mb-8">
@@ -204,7 +168,7 @@ const CategoryBar = () => {
               key={category.id || category.slug}
               category={category}
               index={i}
-              imageOverride={config.imageOverrides?.[category.slug] ?? null}
+              imageOverride={serverConfig.imageOverrides?.[category.slug] ?? null}
             />
           ))}
         </div>

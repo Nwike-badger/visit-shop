@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../../../api/axiosConfig';
 import { toast } from 'react-hot-toast';
 import {
@@ -7,15 +7,8 @@ import {
   ArrowUpToLine, CheckCircle2, Layers,
 } from 'lucide-react';
 import { Card, CardHeader, CardBody } from '../SharedUI';
-import { CAT_BAR_CONFIG_KEY, defaultCatBarConfig, loadCatBarConfig } from '../../../../components/CategoryBar';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const persistConfig = (cfg) => {
-  localStorage.setItem(CAT_BAR_CONFIG_KEY, JSON.stringify(cfg));
-  window.dispatchEvent(new Event('cat_bar_config_updated'));
-};
-
 const flattenAll = (nodes, depth = 0, result = []) => {
   for (const n of nodes) {
     result.push({ slug: n.slug, name: n.name, depth });
@@ -35,7 +28,6 @@ const findNode = (nodes, slug) => {
   return null;
 };
 
-// All LEAF categories (no children) anywhere in the tree — "closest to the product"
 const collectLeaves = (nodes, out = []) => {
   for (const n of nodes) {
     if (n.children?.length) collectLeaves(n.children, out);
@@ -44,7 +36,6 @@ const collectLeaves = (nodes, out = []) => {
   return out;
 };
 
-// All categories at an exact depth. 0 = roots, 1 = their children, etc.
 const collectAtDepth = (nodes, targetDepth, currentDepth = 0, out = []) => {
   for (const n of nodes) {
     if (currentDepth === targetDepth) out.push(n);
@@ -189,64 +180,55 @@ const MODES = [
 
 // ─── CategoryBarSettings ──────────────────────────────────────────────────────
 export default function CategoryBarSettings({ allCategories }) {
-  const [config, setConfig]       = useState(loadCatBarConfig);
-  const [mode, setMode]           = useState('PARENT');     // PARENT | LEAVES | DEPTH
-  const [depth, setDepth]         = useState(1);            // used in DEPTH mode
-  const [saving, setSaving]       = useState(false);
-  const [loadingServer, setLoadingServer] = useState(true); // ← fetch server config on mount
-  const [pickerFor, setPickerFor] = useState(null);
+  const [parentSlug, setParentSlug] = useState(null);
+  const [mode, setMode]             = useState('PARENT');
+  const [depth, setDepth]           = useState(1);
+  const [order, setOrder]           = useState([]);          // ordered slugs
+  const [hiddenSlugs, setHiddenSlugs] = useState([]);        // hidden slugs
+  const [imageOverrides, setImageOverrides] = useState({});  // slug → url
 
-  // ── Fetch authoritative config from server on mount ──
-  // Without this, the admin panel shows a stale localStorage value if
-  // another device saved a different config.
+  const [saving, setSaving]         = useState(false);
+  const [loadingServer, setLoadingServer] = useState(true);
+  const [pickerFor, setPickerFor]   = useState(null);
+
+  // ── Load the ENTIRE config from the server ──
   useEffect(() => {
     api.get('/v1/config/cat-bar')
       .then(res => {
-        const serverSlug  = res.data?.catBarParentSlug ?? null;
-        const serverMode  = res.data?.catBarMode ?? 'PARENT';
-        const serverDepth = res.data?.catBarDepth ?? 1;
-        setConfig(prev => ({ ...prev, parentSlug: serverSlug }));
-        setMode(serverMode);
-        setDepth(serverDepth ?? 1);
+        setParentSlug(res.data?.catBarParentSlug ?? null);
+        setMode(res.data?.catBarMode ?? 'PARENT');
+        setDepth(res.data?.catBarDepth ?? 1);
+        setOrder(res.data?.catBarOrder ?? []);
+        setHiddenSlugs(res.data?.catBarHidden ?? []);
+        setImageOverrides(res.data?.catBarImageOverrides ?? {});
       })
-      .catch(() => {
-        // Silently fall back to localStorage value already in state (PARENT mode)
-      })
+      .catch(() => { /* keep defaults */ })
       .finally(() => setLoadingServer(false));
   }, []);
 
   const flatOptions = useMemo(() => flattenAll(allCategories || []), [allCategories]);
 
-  // The pool of categories shown in the bar — depends on the selected mode.
   const poolFromTree = useMemo(() => {
     if (!Array.isArray(allCategories)) return [];
-
     if (mode === 'LEAVES') return collectLeaves(allCategories);
     if (mode === 'DEPTH')  return collectAtDepth(allCategories, depth ?? 1);
-
-    // PARENT mode
-    if (!config.parentSlug) {
-      return allCategories.filter(c => !c.parent && !c.parentId && !c.parentSlug);
-    }
-    const parent = findNode(allCategories, config.parentSlug);
-    return parent?.children ?? [];
-  }, [allCategories, mode, depth, config.parentSlug]);
+    if (!parentSlug) return allCategories.filter(c => !c.parent && !c.parentId && !c.parentSlug);
+    return findNode(allCategories, parentSlug)?.children ?? [];
+  }, [allCategories, mode, depth, parentSlug]);
 
   const [items, setItems] = useState([]);
 
   useEffect(() => {
-    const hidden   = new Set(config.hiddenSlugs ?? []);
-    const orderMap = new Map((config.order ?? []).map((s, i) => [s, i]));
-
+    const hidden   = new Set(hiddenSlugs ?? []);
+    const orderMap = new Map((order ?? []).map((s, i) => [s, i]));
     const withMeta = poolFromTree.map(cat => ({
       ...cat,
       hidden:   hidden.has(cat.slug),
       orderIdx: orderMap.has(cat.slug) ? orderMap.get(cat.slug) : 9999,
     }));
-
     withMeta.sort((a, b) => a.orderIdx - b.orderIdx);
     setItems(withMeta);
-  }, [poolFromTree, config.order, config.hiddenSlugs]);
+  }, [poolFromTree, order, hiddenSlugs]);
 
   const extractOrder = (arr) => arr.map(it => it.slug);
 
@@ -256,7 +238,7 @@ export default function CategoryBarSettings({ allCategories }) {
     if (target < 0 || target >= next.length) return;
     [next[idx], next[target]] = [next[target], next[idx]];
     setItems(next);
-    setConfig(c => ({ ...c, order: extractOrder(next) }));
+    setOrder(extractOrder(next));
   };
 
   const pinFirst = (idx) => {
@@ -264,63 +246,57 @@ export default function CategoryBarSettings({ allCategories }) {
     const [item] = next.splice(idx, 1);
     next.unshift(item);
     setItems(next);
-    setConfig(c => ({ ...c, order: extractOrder(next) }));
+    setOrder(extractOrder(next));
   };
 
   const toggleHidden = (slug) => {
-    setConfig(c => {
-      const set = new Set(c.hiddenSlugs ?? []);
+    setHiddenSlugs(prev => {
+      const set = new Set(prev ?? []);
       set.has(slug) ? set.delete(slug) : set.add(slug);
-      return { ...c, hiddenSlugs: [...set] };
+      return [...set];
     });
   };
 
   const applyImageOverride = (slug, url) => {
-    setConfig(c => {
-      const overrides = { ...c.imageOverrides };
-      if (url) {
-        overrides[slug] = url;
-      } else {
-        delete overrides[slug];
-      }
-      return { ...c, imageOverrides: overrides };
+    setImageOverrides(prev => {
+      const next = { ...prev };
+      if (url) next[slug] = url;
+      else delete next[slug];
+      return next;
     });
   };
 
-  // Switching mode changes the entire pool — reset order/hidden so curation
-  // always reflects the categories actually on screen.
   const handleModeChange = (newMode) => {
     if (newMode === mode) return;
     setMode(newMode);
-    setConfig(c => ({ ...c, order: [], hiddenSlugs: [] }));
+    setOrder([]);
+    setHiddenSlugs([]);
   };
 
   const handleDepthChange = (val) => {
-    const n = Math.max(0, parseInt(val, 10) || 0);
-    setDepth(n);
-    setConfig(c => ({ ...c, order: [], hiddenSlugs: [] }));
+    setDepth(Math.max(0, parseInt(val, 10) || 0));
+    setOrder([]);
+    setHiddenSlugs([]);
   };
 
   const handleParentChange = (slug) => {
-    setConfig(c => ({
-      ...c,
-      parentSlug:  slug || null,
-      order:       [],   // reset when changing level
-      hiddenSlugs: [],
-    }));
+    setParentSlug(slug || null);
+    setOrder([]);
+    setHiddenSlugs([]);
   };
 
+  // ── Save the ENTIRE config to the server ──
   const handleSave = async () => {
     setSaving(true);
     try {
-      // mode / parentSlug / depth → backend (device-independent source of truth)
       await api.put('/v1/config/cat-bar', {
-        catBarMode:       mode,
-        catBarParentSlug: mode === 'PARENT' ? (config.parentSlug ?? null) : null,
-        catBarDepth:      mode === 'DEPTH'  ? depth : null,
+        catBarMode:           mode,
+        catBarParentSlug:     mode === 'PARENT' ? (parentSlug ?? null) : null,
+        catBarDepth:          mode === 'DEPTH'  ? depth : null,
+        catBarOrder:          order,
+        catBarHidden:         hiddenSlugs,
+        catBarImageOverrides: imageOverrides,
       });
-      // order / hidden / imageOverrides → localStorage (lightweight UI prefs)
-      persistConfig(config);
       toast.success('Category bar settings saved!');
     } catch {
       toast.error('Failed to save settings');
@@ -336,12 +312,16 @@ export default function CategoryBarSettings({ allCategories }) {
         catBarMode: 'PARENT',
         catBarParentSlug: null,
         catBarDepth: null,
+        catBarOrder: [],
+        catBarHidden: [],
+        catBarImageOverrides: {},
       });
       setMode('PARENT');
+      setParentSlug(null);
       setDepth(1);
-      const fresh = defaultCatBarConfig();
-      setConfig(fresh);
-      persistConfig(fresh);
+      setOrder([]);
+      setHiddenSlugs([]);
+      setImageOverrides({});
       toast.success('Reset to defaults');
     } catch {
       toast.error('Failed to reset');
@@ -355,10 +335,9 @@ export default function CategoryBarSettings({ allCategories }) {
   const emptyMsg =
     mode === 'LEAVES' ? 'No product-level categories found.'
     : mode === 'DEPTH' ? `No categories at depth ${depth}.`
-    : config.parentSlug ? 'This category has no children.'
+    : parentSlug ? 'This category has no children.'
     : 'No root categories found.';
 
-  // Show a subtle loading state while fetching server config
   if (loadingServer) {
     return (
       <Card>
@@ -439,7 +418,7 @@ export default function CategoryBarSettings({ allCategories }) {
                 Pick the parent whose direct children appear in the bar. Leave blank to show root-level categories.
               </p>
               <select
-                value={config.parentSlug ?? ''}
+                value={parentSlug ?? ''}
                 onChange={e => handleParentChange(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
               >
@@ -450,9 +429,9 @@ export default function CategoryBarSettings({ allCategories }) {
                   </option>
                 ))}
               </select>
-              {config.parentSlug && (
+              {parentSlug && (
                 <p className="text-[10px] text-blue-500 font-mono mt-1">
-                  /{config.parentSlug} → showing {items.length} direct children
+                  /{parentSlug} → showing {items.length} direct children
                 </p>
               )}
             </div>
@@ -510,7 +489,7 @@ export default function CategoryBarSettings({ allCategories }) {
 
               <div className="space-y-1.5">
                 {items.map((item, idx) => {
-                  const override    = config.imageOverrides?.[item.slug];
+                  const override    = imageOverrides?.[item.slug];
                   const effectiveImg = override || item.imageUrl;
                   const isHidden    = item.hidden;
 
@@ -523,12 +502,10 @@ export default function CategoryBarSettings({ allCategories }) {
                           : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      {/* Position index */}
                       <span className="text-[10px] font-black text-slate-300 w-4 text-center shrink-0">
                         {isHidden ? '—' : idx - items.filter((it, i) => i < idx && it.hidden).length + 1}
                       </span>
 
-                      {/* Image preview / override trigger */}
                       <button
                         onClick={() => setPickerFor(item.slug)}
                         title="Override image"
@@ -554,7 +531,6 @@ export default function CategoryBarSettings({ allCategories }) {
                         )}
                       </button>
 
-                      {/* Name + slug */}
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-bold truncate ${isHidden ? 'text-slate-400' : 'text-slate-800'}`}>
                           {item.name}
@@ -562,7 +538,6 @@ export default function CategoryBarSettings({ allCategories }) {
                         <p className="text-[9px] text-slate-400 font-mono truncate">/{item.slug}</p>
                       </div>
 
-                      {/* Controls */}
                       <div className="flex items-center gap-0.5 shrink-0">
                         {idx > 0 && !isHidden && (
                           <button
@@ -616,7 +591,7 @@ export default function CategoryBarSettings({ allCategories }) {
           {/* ── Save bar ── */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <p className="text-[10px] text-slate-400">
-              Mode &amp; parent saved to server · Order &amp; visibility saved locally.
+              All settings saved to the server — synced across web &amp; mobile.
             </p>
             <button
               onClick={handleSave}
@@ -634,7 +609,7 @@ export default function CategoryBarSettings({ allCategories }) {
       {pickerFor && (
         <ImagePickerModal
           slug={pickerFor}
-          currentUrl={config.imageOverrides?.[pickerFor] ?? ''}
+          currentUrl={imageOverrides?.[pickerFor] ?? ''}
           onPick={(url) => applyImageOverride(pickerFor, url)}
           onClose={() => setPickerFor(null)}
         />
