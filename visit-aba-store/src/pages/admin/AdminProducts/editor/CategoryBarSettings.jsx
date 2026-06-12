@@ -35,6 +35,24 @@ const findNode = (nodes, slug) => {
   return null;
 };
 
+// All LEAF categories (no children) anywhere in the tree — "closest to the product"
+const collectLeaves = (nodes, out = []) => {
+  for (const n of nodes) {
+    if (n.children?.length) collectLeaves(n.children, out);
+    else out.push(n);
+  }
+  return out;
+};
+
+// All categories at an exact depth. 0 = roots, 1 = their children, etc.
+const collectAtDepth = (nodes, targetDepth, currentDepth = 0, out = []) => {
+  for (const n of nodes) {
+    if (currentDepth === targetDepth) out.push(n);
+    else if (n.children?.length) collectAtDepth(n.children, targetDepth, currentDepth + 1, out);
+  }
+  return out;
+};
+
 // ─── ImagePickerModal ─────────────────────────────────────────────────────────
 function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
   const [url, setUrl]           = useState(currentUrl || '');
@@ -162,38 +180,57 @@ function ImagePickerModal({ slug, currentUrl, onPick, onClose }) {
   );
 }
 
+// ─── Mode metadata ──────────────────────────────────────────────────────────
+const MODES = [
+  { key: 'PARENT', label: 'Parent',        sub: 'Children of one parent' },
+  { key: 'LEAVES', label: 'Product-level', sub: 'All bottom categories' },
+  { key: 'DEPTH',  label: 'By depth',      sub: 'Exact tree level' },
+];
+
 // ─── CategoryBarSettings ──────────────────────────────────────────────────────
 export default function CategoryBarSettings({ allCategories }) {
   const [config, setConfig]       = useState(loadCatBarConfig);
+  const [mode, setMode]           = useState('PARENT');     // PARENT | LEAVES | DEPTH
+  const [depth, setDepth]         = useState(1);            // used in DEPTH mode
   const [saving, setSaving]       = useState(false);
   const [loadingServer, setLoadingServer] = useState(true); // ← fetch server config on mount
   const [pickerFor, setPickerFor] = useState(null);
 
-  // ── Fetch authoritative parentSlug from server on mount ──
+  // ── Fetch authoritative config from server on mount ──
   // Without this, the admin panel shows a stale localStorage value if
   // another device saved a different config.
   useEffect(() => {
     api.get('/v1/config/cat-bar')
       .then(res => {
-        const serverSlug = res.data?.catBarParentSlug ?? null;
+        const serverSlug  = res.data?.catBarParentSlug ?? null;
+        const serverMode  = res.data?.catBarMode ?? 'PARENT';
+        const serverDepth = res.data?.catBarDepth ?? 1;
         setConfig(prev => ({ ...prev, parentSlug: serverSlug }));
+        setMode(serverMode);
+        setDepth(serverDepth ?? 1);
       })
       .catch(() => {
-        // Silently fall back to localStorage value already in state
+        // Silently fall back to localStorage value already in state (PARENT mode)
       })
       .finally(() => setLoadingServer(false));
   }, []);
 
   const flatOptions = useMemo(() => flattenAll(allCategories || []), [allCategories]);
 
+  // The pool of categories shown in the bar — depends on the selected mode.
   const poolFromTree = useMemo(() => {
     if (!Array.isArray(allCategories)) return [];
+
+    if (mode === 'LEAVES') return collectLeaves(allCategories);
+    if (mode === 'DEPTH')  return collectAtDepth(allCategories, depth ?? 1);
+
+    // PARENT mode
     if (!config.parentSlug) {
       return allCategories.filter(c => !c.parent && !c.parentId && !c.parentSlug);
     }
     const parent = findNode(allCategories, config.parentSlug);
     return parent?.children ?? [];
-  }, [allCategories, config.parentSlug]);
+  }, [allCategories, mode, depth, config.parentSlug]);
 
   const [items, setItems] = useState([]);
 
@@ -250,6 +287,20 @@ export default function CategoryBarSettings({ allCategories }) {
     });
   };
 
+  // Switching mode changes the entire pool — reset order/hidden so curation
+  // always reflects the categories actually on screen.
+  const handleModeChange = (newMode) => {
+    if (newMode === mode) return;
+    setMode(newMode);
+    setConfig(c => ({ ...c, order: [], hiddenSlugs: [] }));
+  };
+
+  const handleDepthChange = (val) => {
+    const n = Math.max(0, parseInt(val, 10) || 0);
+    setDepth(n);
+    setConfig(c => ({ ...c, order: [], hiddenSlugs: [] }));
+  };
+
   const handleParentChange = (slug) => {
     setConfig(c => ({
       ...c,
@@ -262,9 +313,11 @@ export default function CategoryBarSettings({ allCategories }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // parentSlug → backend (device-independent source of truth)
+      // mode / parentSlug / depth → backend (device-independent source of truth)
       await api.put('/v1/config/cat-bar', {
-        catBarParentSlug: config.parentSlug ?? null,
+        catBarMode:       mode,
+        catBarParentSlug: mode === 'PARENT' ? (config.parentSlug ?? null) : null,
+        catBarDepth:      mode === 'DEPTH'  ? depth : null,
       });
       // order / hidden / imageOverrides → localStorage (lightweight UI prefs)
       persistConfig(config);
@@ -279,7 +332,13 @@ export default function CategoryBarSettings({ allCategories }) {
   const handleReset = async () => {
     setSaving(true);
     try {
-      await api.put('/v1/config/cat-bar', { catBarParentSlug: null });
+      await api.put('/v1/config/cat-bar', {
+        catBarMode: 'PARENT',
+        catBarParentSlug: null,
+        catBarDepth: null,
+      });
+      setMode('PARENT');
+      setDepth(1);
       const fresh = defaultCatBarConfig();
       setConfig(fresh);
       persistConfig(fresh);
@@ -292,6 +351,12 @@ export default function CategoryBarSettings({ allCategories }) {
   };
 
   const visibleCount = items.filter(it => !it.hidden).length;
+
+  const emptyMsg =
+    mode === 'LEAVES' ? 'No product-level categories found.'
+    : mode === 'DEPTH' ? `No categories at depth ${depth}.`
+    : config.parentSlug ? 'This category has no children.'
+    : 'No root categories found.';
 
   // Show a subtle loading state while fetching server config
   if (loadingServer) {
@@ -339,40 +404,100 @@ export default function CategoryBarSettings({ allCategories }) {
 
         <CardBody className="space-y-5">
 
-          {/* ── Source level picker ── */}
+          {/* ── Mode selector ── */}
           <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-              Show children of
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
+              How to populate the bar
             </label>
-            <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">
-              Pick the parent whose direct children appear in the bar. Leave blank to show root-level categories.
-            </p>
-            <select
-              value={config.parentSlug ?? ''}
-              onChange={e => handleParentChange(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
-            >
-              <option value="">— Root categories (top-level only)</option>
-              {flatOptions.map(c => (
-                <option key={c.slug} value={c.slug}>
-                  {'  '.repeat(c.depth)}{c.depth > 0 ? '↳ ' : ''}{c.name}
-                </option>
+            <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-xl">
+              {MODES.map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => handleModeChange(opt.key)}
+                  className={`px-2 py-2 rounded-lg text-center transition-all ${
+                    mode === opt.key ? 'bg-white shadow-sm' : 'hover:bg-white/60'
+                  }`}
+                >
+                  <span className={`block text-xs font-bold ${mode === opt.key ? 'text-slate-900' : 'text-slate-500'}`}>
+                    {opt.label}
+                  </span>
+                  <span className="block text-[9px] text-slate-400 mt-0.5 leading-tight">
+                    {opt.sub}
+                  </span>
+                </button>
               ))}
-            </select>
-            {config.parentSlug && (
-              <p className="text-[10px] text-blue-500 font-mono mt-1">
-                /{config.parentSlug} → showing {items.length} direct children
-              </p>
-            )}
+            </div>
           </div>
+
+          {/* ── PARENT mode: parent picker ── */}
+          {mode === 'PARENT' && (
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                Show children of
+              </label>
+              <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">
+                Pick the parent whose direct children appear in the bar. Leave blank to show root-level categories.
+              </p>
+              <select
+                value={config.parentSlug ?? ''}
+                onChange={e => handleParentChange(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+              >
+                <option value="">— Root categories (top-level only)</option>
+                {flatOptions.map(c => (
+                  <option key={c.slug} value={c.slug}>
+                    {'  '.repeat(c.depth)}{c.depth > 0 ? '↳ ' : ''}{c.name}
+                  </option>
+                ))}
+              </select>
+              {config.parentSlug && (
+                <p className="text-[10px] text-blue-500 font-mono mt-1">
+                  /{config.parentSlug} → showing {items.length} direct children
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── LEAVES mode: info ── */}
+          {mode === 'LEAVES' && (
+            <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">
+              <Layers size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-emerald-700 leading-relaxed">
+                Showing the <strong>{items.length}</strong> bottom-level categories from across the whole tree —
+                the ones products actually sit in. Use the list below to pin your favourites first and hide the rest.
+              </p>
+            </div>
+          )}
+
+          {/* ── DEPTH mode: depth picker ── */}
+          {mode === 'DEPTH' && (
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                Tree depth
+              </label>
+              <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">
+                0 = root categories · 1 = their children · 2 = grandchildren, and so on.
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  value={depth}
+                  onChange={e => handleDepthChange(e.target.value)}
+                  className="w-24 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Showing <span className="text-blue-500 font-bold">{items.length}</span> categories at depth {depth}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ── Category list ── */}
           {items.length === 0 ? (
             <div className="py-8 text-center">
               <Layers size={24} className="mx-auto text-slate-200 mb-2" />
-              <p className="text-xs text-slate-400">
-                {config.parentSlug ? 'This category has no children.' : 'No root categories found.'}
-              </p>
+              <p className="text-xs text-slate-400">{emptyMsg}</p>
             </div>
           ) : (
             <div>
@@ -491,7 +616,7 @@ export default function CategoryBarSettings({ allCategories }) {
           {/* ── Save bar ── */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <p className="text-[10px] text-slate-400">
-              Parent level saved to server · Order & visibility saved locally.
+              Mode &amp; parent saved to server · Order &amp; visibility saved locally.
             </p>
             <button
               onClick={handleSave}

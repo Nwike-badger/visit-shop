@@ -35,6 +35,26 @@ const findNodeBySlug = (nodes, slug) => {
   return null;
 };
 
+// ─── Collect all LEAF categories (no children) anywhere in the tree ──────────
+// These are the categories "closest to the product" — gathered across ALL roots.
+const collectLeaves = (nodes, out = []) => {
+  for (const n of nodes) {
+    if (n.children?.length) collectLeaves(n.children, out);
+    else out.push(n);
+  }
+  return out;
+};
+
+// ─── Collect all categories at an exact depth ────────────────────────────────
+// depth 0 = roots, 1 = their children, 2 = grandchildren, etc.
+const collectAtDepth = (nodes, targetDepth, currentDepth = 0, out = []) => {
+  for (const n of nodes) {
+    if (currentDepth === targetDepth) out.push(n);
+    else if (n.children?.length) collectAtDepth(n.children, targetDepth, currentDepth + 1, out);
+  }
+  return out;
+};
+
 // ─── CategoryItem ─────────────────────────────────────────────────────────────
 const CategoryItem = ({ category, index, imageOverride }) => {
   const [imgError, setImgError] = useState(false);
@@ -79,20 +99,30 @@ const CategoryItem = ({ category, index, imageOverride }) => {
 const CategoryBar = () => {
   const { categories: allCategories, loading } = useCategories();
   const [config, setConfig] = useState(loadCatBarConfig);
-  const [serverParentSlug, setServerParentSlug] = useState(undefined); // undefined = not yet loaded
 
-  // Fetch authoritative parent slug from backend on mount
+  // Server config drives how the bar is populated. undefined = not yet loaded.
+  // Shape: { parentSlug, mode, depth }
+  const [serverConfig, setServerConfig] = useState(undefined);
+
+  // Fetch authoritative cat-bar config from backend on mount
   useEffect(() => {
     api.get('/v1/config/cat-bar')
       .then(res => {
-        const slug = res.data?.catBarParentSlug ?? null;
-        setServerParentSlug(slug);
-        // Keep localStorage in sync so it acts as a fast cache on next visit
-        setConfig(prev => ({ ...prev, parentSlug: slug }));
+        setServerConfig({
+          parentSlug: res.data?.catBarParentSlug ?? null,
+          mode:       res.data?.catBarMode ?? 'PARENT',
+          depth:      res.data?.catBarDepth ?? null,
+        });
+        // Keep localStorage parentSlug in sync as a fast cache on next visit
+        setConfig(prev => ({ ...prev, parentSlug: res.data?.catBarParentSlug ?? null }));
       })
       .catch(() => {
-        // Fall back to localStorage silently on network error
-        setServerParentSlug(loadCatBarConfig().parentSlug ?? null);
+        // Fall back to localStorage silently on network error (PARENT mode)
+        setServerConfig({
+          parentSlug: loadCatBarConfig().parentSlug ?? null,
+          mode:       'PARENT',
+          depth:      null,
+        });
       });
   }, []);
 
@@ -104,18 +134,28 @@ const CategoryBar = () => {
   }, []);
 
   const categories = useMemo(() => {
-    if (!Array.isArray(allCategories) || serverParentSlug === undefined) return [];
+    if (!Array.isArray(allCategories) || serverConfig === undefined) return [];
 
+    const { parentSlug, mode, depth } = serverConfig;
     let pool;
-    if (!serverParentSlug) {
-      // No parent configured — show root-level categories
-      pool = allCategories.filter(
-        (cat) => !cat.parent && !cat.parentId && !cat.parentSlug,
-      );
+
+    if (mode === 'LEAVES') {
+      // Bottom-level categories from across the whole tree (closest to product)
+      pool = collectLeaves(allCategories);
+    } else if (mode === 'DEPTH') {
+      // Everything at an exact depth (0 = roots, 1 = their children, ...)
+      pool = collectAtDepth(allCategories, depth ?? 1);
     } else {
-      // Show children of the configured parent slug
-      const parent = findNodeBySlug(allCategories, serverParentSlug);
-      pool = parent?.children ?? [];
+      // PARENT mode (default): direct children of the configured parent,
+      // or root categories when no parent is set.
+      if (!parentSlug) {
+        pool = allCategories.filter(
+          (cat) => !cat.parent && !cat.parentId && !cat.parentSlug,
+        );
+      } else {
+        const parent = findNodeBySlug(allCategories, parentSlug);
+        pool = parent?.children ?? [];
+      }
     }
 
     // Remove admin-hidden slugs
@@ -133,10 +173,10 @@ const CategoryBar = () => {
     }
 
     return pool;
-  }, [allCategories, config, serverParentSlug]);
+  }, [allCategories, config, serverConfig]);
 
   // Show skeleton while categories are loading OR server config hasn't arrived yet
-  if (loading || serverParentSlug === undefined) {
+  if (loading || serverConfig === undefined) {
     return (
       <div className="bg-white border-b border-gray-100 mb-3 sm:mb-8">
         <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-4">
