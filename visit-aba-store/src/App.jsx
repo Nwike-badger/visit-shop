@@ -20,6 +20,9 @@ import OrdersPage from "./pages/account/OrdersPage";
 import OrderDetailPage from "./pages/account/OrderDetailPage";
 import PaymentCallback from "./pages/PaymentCallback";
 import CategoryPage from "./pages/CategoryPage";
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 
 // --- ROUTE PROTECTION & LAYOUTS ---
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -60,6 +63,9 @@ function App() {
                     <Route path="/checkout" element={<CheckoutPage />} />
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/signup" element={<SignupPage />} />
+                    <Route path="/verify-email" element={<VerifyEmailPage />} />
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
                     <Route path="/search" element={<SearchResults />} />
                     <Route path="/custom" element={<CustomDesignPage />} />
                     <Route path="/payment/callback" element={<PaymentCallback />} />

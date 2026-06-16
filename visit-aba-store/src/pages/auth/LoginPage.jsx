@@ -23,14 +23,19 @@ const getRolesFromToken = (token) => {
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // ✨ Added toggle state
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
+  // ── Email verification state ──
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resending, setResending] = useState(false);
+
   const navigate = useNavigate();
   const location = useLocation();
   const { refreshCart } = useCart();
-  const { login } = useAuth(); 
+  const { login } = useAuth();
 
   const from = location.state?.from?.pathname || "/";
 
@@ -38,22 +43,23 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setNeedsVerification(false);
     const guestId = localStorage.getItem('guest_cart_id');
 
     try {
       const response = await api.post('/v1/auth/login', {
         username: email,
         password: password,
-        guestId: guestId 
+        guestId: guestId
       });
 
       const { accessToken } = response.data;
       await login(accessToken);
       localStorage.removeItem('guest_cart_id');
       refreshCart();
-      
+
       const isAdmin = getRolesFromToken(accessToken);
-      
+
       if (isAdmin) {
           toast.success("Welcome back to the command center, Admin!", { icon: '🛡️' });
           const destination = (from === "/" || from === "/login") ? "/admin/products" : from;
@@ -63,15 +69,34 @@ const LoginPage = () => {
           navigate(from, { replace: true });
       }
     } catch (err) {
-      setError('Invalid email or password');
+      const data = err.response?.data;
+      if (err.response?.status === 403 && data?.error === 'EMAIL_NOT_VERIFIED') {
+        setNeedsVerification(true);
+        setUnverifiedEmail(data.email || email);
+        setError('');
+      } else {
+        setError('Invalid email or password');
+      }
       setLoading(false);
-    } 
+    }
+  };
+
+  const resendVerification = async () => {
+    setResending(true);
+    try {
+      await api.post('/v1/auth/resend-verification', { email: unverifiedEmail });
+      toast.success('Verification email sent. Check your inbox.');
+    } catch {
+      toast.error('Could not resend right now. Try again shortly.');
+    } finally {
+      setResending(false);
+    }
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
     setLoading(true);
     const guestId = localStorage.getItem('guest_cart_id');
-    
+
     try {
       const response = await api.post('/v1/auth/google', {
         token: credentialResponse.credential,
@@ -82,9 +107,9 @@ const LoginPage = () => {
       await login(accessToken);
       localStorage.removeItem('guest_cart_id');
       refreshCart();
-      
+
       const isAdmin = getRolesFromToken(accessToken);
-      
+
       if (isAdmin) {
           toast.success("Admin authenticated via Google.", { icon: '🛡️' });
           const destination = (from === "/" || from === "/login") ? "/admin/products" : from;
@@ -102,12 +127,12 @@ const LoginPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12 font-sans">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-        
+
         <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-900">Welcome Back</h2>
             <p className="text-sm text-gray-500 mt-2">Log in to continue shopping</p>
         </div>
-        
+
         <div className="mb-6 flex justify-center">
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
@@ -126,13 +151,31 @@ const LoginPage = () => {
             <div className="flex-grow border-t border-gray-200"></div>
         </div>
 
+        {/* ── Email verification banner ── */}
+        {needsVerification && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+            <p className="text-sm font-bold text-amber-800">Verify your email to continue</p>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              We sent a link to <span className="font-semibold">{unverifiedEmail}</span>. Click it to activate your account, then log in.
+            </p>
+            <button
+              type="button"
+              onClick={resendVerification}
+              disabled={resending}
+              className="mt-3 text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {resending ? 'Sending…' : 'Resend verification email'}
+            </button>
+          </div>
+        )}
+
         {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-100 font-medium">{error}</div>}
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1.5">Email Address</label>
-            <input 
-              type="email" 
+            <input
+              type="email"
               required
               className="w-full p-3.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-sm text-gray-900"
               value={email}
@@ -141,19 +184,17 @@ const LoginPage = () => {
               disabled={loading}
             />
           </div>
-          
+
           <div>
-            {/* ✨ Added Forgot Password Link in the Label row */}
             <div className="flex justify-between items-center mb-1.5">
               <label className="block text-sm font-bold text-gray-700">Password</label>
               <Link to="/forgot-password" className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors">
                 Forgot?
               </Link>
             </div>
-            {/* ✨ Show/Hide Password Wrapper */}
             <div className="relative">
-              <input 
-                type={showPassword ? "text" : "password"} 
+              <input
+                type={showPassword ? "text" : "password"}
                 required
                 className="w-full p-3.5 pr-12 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-sm text-gray-900"
                 value={password}
@@ -175,8 +216,8 @@ const LoginPage = () => {
               </button>
             </div>
           </div>
-          
-          <button 
+
+          <button
             disabled={loading}
             className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition-all shadow-lg shadow-gray-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -186,9 +227,9 @@ const LoginPage = () => {
 
         <div className="mt-8 text-center text-sm font-medium text-gray-500">
           Don't have an account?{' '}
-          <Link 
-            to="/signup" 
-            state={{ from: location.state?.from }} 
+          <Link
+            to="/signup"
+            state={{ from: location.state?.from }}
             className="font-bold text-blue-600 hover:text-blue-700 transition-colors"
           >
             Create one now
