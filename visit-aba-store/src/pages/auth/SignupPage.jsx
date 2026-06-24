@@ -29,8 +29,10 @@ const SignupPage = () => {
       await api.post('/v1/auth/register', formData);
       setSubmitted(true);           // show the "verify your email" screen
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed. Try again.');
-    } finally {
+  const data = err.response?.data;
+  const msg = data?.message || data?.error || 'Registration failed. Try again.';
+  toast.error(msg);
+} finally {
       setLoading(false);
     }
   };

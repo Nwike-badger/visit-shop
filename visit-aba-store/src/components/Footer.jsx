@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import {
   MapPin, Phone, Mail, Instagram, Twitter, Facebook, Youtube,
   ArrowRight, Shield, Truck, RotateCcw, Headphones,
-  CreditCard, Smartphone
 } from 'lucide-react';
 
 const Footer = () => {
@@ -10,30 +9,32 @@ const Footer = () => {
 
   const shopLinks = [
     { label: 'Natives',      to: '/category/men' },
-    { label: 'Fabrics',  to: '/category/men' },
-    { label: 'Leather',to: '/category/men' },
+    { label: 'Fabrics',      to: '/category/men' },
+    { label: 'Leather',      to: '/category/men' },
     { label: 'Sneakers',     to: '/category/footwear' },
     { label: 'All Products', to: '/products' },
   ];
 
   const companyLinks = [
-    { label: 'About ExploreAba', to: '/about' },
+    { label: 'About ExploreAba',   to: '/about' },
     { label: 'Sell on ExploreAba', to: '/sell' },
-    { label: 'Careers',          to: '/careers' },
-    { label: 'Press',            to: '/press' },
+    { label: 'Careers',            to: '/careers' },
+    { label: 'Press',              to: '/press' },
   ];
 
   const helpLinks = [
-    { label: 'Contact Us',    to: '/contact' },
-    { label: 'Track Order',   to: '/orders' },
-    { label: 'FAQs',          to: '/faq' },
-    { label: 'Size Guide',    to: '/size-guide' },
+    { label: 'Contact Us',  to: '/contact' },
+    { label: 'Track Order', to: '/orders' },
+    { label: 'FAQs',        to: '/faq' },
+    { label: 'Size Guide',  to: '/size-guide' },
   ];
 
+  // ── All five policy pages, all pointing to /legal with anchor hashes ──
   const legalLinks = [
-    { label: 'Terms & Conditions', to: '/legal#terms' },
+    { label: 'Terms & Conditions', to: '/legal#terms'   },
     { label: 'Privacy Policy',     to: '/legal#privacy' },
     { label: 'Returns Policy',     to: '/legal#returns' },
+    { label: 'Refund Policy',      to: '/legal#refunds' }, // ← added
     { label: 'Cookie Policy',      to: '/legal#cookies' },
   ];
 
@@ -45,10 +46,10 @@ const Footer = () => {
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: Truck,       title: 'Nationwide Delivery', sub: 'Fast & reliable' },
-              { icon: RotateCcw,   title: 'Easy Returns',        sub: '14-day policy' },
-              { icon: Shield,      title: 'Secure Payments',     sub: '256-bit encryption' },
-              { icon: Headphones,  title: '24/7 Support',        sub: 'Always here for you' },
+              { icon: Truck,      title: 'Nationwide Delivery', sub: 'Fast & reliable' },
+              { icon: RotateCcw,  title: 'Easy Returns',        sub: '14-day policy'   },
+              { icon: Shield,     title: 'Secure Payments',     sub: '256-bit encryption' },
+              { icon: Headphones, title: '24/7 Support',        sub: 'Always here for you' },
             ].map(({ icon: Icon, title, sub }) => (
               <div key={title} className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
@@ -82,10 +83,7 @@ const Footer = () => {
 
             {/* Newsletter */}
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Stay in the loop</p>
-            <form
-              onSubmit={(e) => e.preventDefault()}
-              className="flex gap-2"
-            >
+            <form onSubmit={(e) => e.preventDefault()} className="flex gap-2">
               <input
                 type="email"
                 placeholder="Your email address"
@@ -134,10 +132,7 @@ const Footer = () => {
                 <ul className="space-y-3">
                   {links.map(({ label, to }) => (
                     <li key={label}>
-                      <Link
-                        to={to}
-                        className="text-sm text-gray-500 hover:text-white transition-colors"
-                      >
+                      <Link to={to} className="text-sm text-gray-500 hover:text-white transition-colors">
                         {label}
                       </Link>
                     </li>
@@ -151,11 +146,11 @@ const Footer = () => {
         {/* Contact row */}
         <div className="mt-10 pt-8 border-t border-white/5">
           <div className="flex flex-wrap gap-6 text-xs text-gray-600">
-            <a href="tel:+2348000000000" className="flex items-center gap-2 hover:text-gray-400 transition-colors">
-              <Phone size={13} /> +234 800 000 0000
+            <a href="tel:+2349061355240" className="flex items-center gap-2 hover:text-gray-400 transition-colors">
+              <Phone size={13} /> +2349061355240
             </a>
-            <a href="mailto:hello@exploreaba.com" className="flex items-center gap-2 hover:text-gray-400 transition-colors">
-              <Mail size={13} /> hello@exploreaba.com
+            <a href="mailto:support@exploreaba.ng" className="flex items-center gap-2 hover:text-gray-400 transition-colors">
+              <Mail size={13} /> support@exploreaba.ng
             </a>
             <span className="flex items-center gap-2">
               <MapPin size={13} /> Ariaria International Market, Aba, Abia State, Nigeria

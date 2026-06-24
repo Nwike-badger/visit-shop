@@ -63,18 +63,22 @@ api.interceptors.response.use(
   },
   (error) => {
     if (!error.response) return Promise.reject(error);
-
     const { status } = error.response;
+    const url = error.config?.url || '';
     const token = localStorage.getItem(TOKEN_KEY);
+
+    // Auth screens (login, register, verify, resend, forgot/reset) show their own
+    // tailored errors — never let the global handler toast over them.
+    const isAuthFlow = url.includes('/v1/auth/');
 
     if (status === 401) {
       if (token) handleSessionExpired();
     } else if (status === 403) {
-      // If they have a token but it's expired, the backend may return 403
-      // instead of 401 on some routes — treat it as a session expiry
+      // A truly expired token can come back as 403 on some routes — treat as session expiry.
       if (token && isTokenExpired(token)) {
         handleSessionExpired();
-      } else {
+      } else if (!isAuthFlow) {
+        // Only show the generic "no access" message for non-auth requests.
         toast("You don't have access to do that. If you think this is a mistake, please contact support.", {
           icon: '🚫',
           duration: 5000,
