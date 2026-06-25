@@ -38,6 +38,7 @@ import AdminProducts from "./pages/admin/AdminProducts/Index";
 import AdminCampaigns from "./pages/admin/AdminCampaigns";
 import CustomDesignPage from "./pages/product/custom/CustomDesignPage";
 import CustomDesignerWizard from "./pages/product/custom/CustomDesignWizard";
+import SizeGuidePage from "./pages/SizeGuidePage";
 
 
 function App() {
@@ -71,6 +72,7 @@ function App() {
                     <Route path="/reset-password" element={<ResetPasswordPage />} />
                     <Route path="/search" element={<SearchResults />} />
                     <Route path="/custom" element={<CustomDesignPage />} />
+                    <Route path="/size-guide" element={<SizeGuidePage />} />
                     <Route path="/payment/callback" element={<PaymentCallback />} />
                     <Route path="/custom/order/:categoryId" element={<CustomDesignerWizard />} />
 

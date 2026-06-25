@@ -109,7 +109,7 @@ const Navbar = () => {
             {/* <span>FREE SHIPPING ON ORDERS OVER ₦100,000</span> */}
             <span className="hidden sm:block opacity-60">|</span>
             <span className="hidden sm:flex items-center gap-1 opacity-80 hover:opacity-100 cursor-pointer">
-              <Phone size={12} /> Enquiry: 07032220306
+              <Phone size={12} /> Enquiry: +2349061355240
             </span>
             <Link to="/custom" className="hover:opacity-100 opacity-80 transition-opacity">Custom</Link>
           </div>
