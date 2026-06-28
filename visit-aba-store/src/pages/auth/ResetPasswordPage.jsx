@@ -35,14 +35,20 @@ const ResetPasswordPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     if (password !== confirm) { setError('Passwords do not match.'); return; }
     setLoading(true);
     try {
       await api.post('/v1/auth/reset-password', { token, newPassword: password });
       setDone(true);
     } catch (err) {
-      setError(err.response?.data?.error || 'This reset link is invalid or has expired. Please request a new one.');
+      const data = err.response?.data;
+      // Backend may return { error: "..." } (token/expiry errors)
+      // OR { newPassword: "..." } (bean-validation errors, keyed by field).
+      const fieldMsg = data && typeof data === 'object'
+        ? data.error || data.newPassword || data.token || Object.values(data)[0]
+        : null;
+      setError(fieldMsg || 'Could not reset your password. Please check the form and try again.');
     } finally {
       setLoading(false);
     }
@@ -103,7 +109,7 @@ const ResetPasswordPage = () => {
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
-                minLength={6}
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -112,7 +118,7 @@ const ResetPasswordPage = () => {
               />
               {eyeBtn}
             </div>
-            <p className="text-xs text-gray-400 mt-2 font-medium">Must be at least 6 characters</p>
+            <p className="text-xs text-gray-400 mt-2 font-medium">Must be at least 8 characters</p>
           </div>
 
           <div>

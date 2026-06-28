@@ -101,20 +101,20 @@ const ResumeDraftBanner = () => {
 
 const CompactHeader = () => (
   <section className="border-b border-stone-200 bg-white">
-    <div className="max-w-7xl mx-auto px-5 sm:px-8 py-8 sm:py-9 fade-up">
-      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+    <div className="max-w-7xl mx-auto px-5 sm:px-8 py-5 sm:py-9 fade-up">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 lg:gap-6">
         <div className="max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-900/5 border border-emerald-900/10 text-xs uppercase tracking-[0.18em] text-emerald-900 mb-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-900/5 border border-emerald-900/10 text-xs uppercase tracking-[0.18em] text-emerald-900 mb-3 sm:mb-4">
             <Sparkles className="w-3 h-3" />
             <span>Made-to-Measure</span>
           </div>
-          <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.0] tracking-tight text-stone-900 mb-3">
+          <h1 className="font-display text-2xl sm:text-4xl lg:text-5xl leading-[1.05] tracking-tight text-stone-900 mb-2 sm:mb-3">
             Tailored in Aba. <span className="font-display-italic text-emerald-800">Made for you.</span>
           </h1>
           <p className="text-sm sm:text-base text-stone-600 max-w-xl leading-relaxed">
             Pick a category, share your measurements (or use our size guide), choose a style — or send your own inspiration. We quote within 24 hours.
           </p>
-          <div className="flex flex-wrap gap-3 mt-5">
+          <div className="flex flex-wrap gap-2.5 sm:gap-3 mt-4 sm:mt-5">
             <a href="#categories" className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-900 text-white rounded-full text-sm font-medium hover:bg-emerald-900 transition group">
               Browse Categories
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition" />
@@ -126,7 +126,7 @@ const CompactHeader = () => (
           </div>
         </div>
 
-        <div className="flex gap-8 sm:gap-10 shrink-0">
+        <div className="flex gap-6 sm:gap-10 shrink-0 pt-1 lg:pt-0">
           <Stat n="11" label="Categories" />
           <Stat n="24h" label="Quote response" />
           <Stat n="5-21d" label="Turnaround" />
@@ -138,8 +138,8 @@ const CompactHeader = () => (
 
 const Stat = ({ n, label }) => (
   <div>
-    <div className="font-display text-2xl sm:text-3xl text-stone-900 leading-none mb-1">{n}</div>
-    <div className="text-[10px] sm:text-xs uppercase tracking-[0.15em] text-stone-500">{label}</div>
+    <div className="font-display text-xl sm:text-3xl text-stone-900 leading-none mb-0.5 sm:mb-1">{n}</div>
+    <div className="text-[10px] sm:text-xs uppercase tracking-[0.12em] sm:tracking-[0.15em] text-stone-500">{label}</div>
   </div>
 );
 
