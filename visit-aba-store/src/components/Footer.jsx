@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import {
-  MapPin, Phone, Mail, Instagram, Twitter, Facebook, Youtube,
+  MapPin, Phone, Mail, Instagram, Twitter, Facebook,
   ArrowRight, Shield, Truck, RotateCcw, Headphones,
 } from 'lucide-react';
+import { FaTiktok } from 'react-icons/fa';
+import { FaXTwitter } from 'react-icons/fa6';
 
 const Footer = () => {
   const year = new Date().getFullYear();
@@ -100,10 +102,10 @@ const Footer = () => {
             {/* Socials */}
             <div className="flex gap-3 mt-6">
               {[
-                { icon: Instagram, href: 'https://instagram.com', label: 'Instagram' },
-                { icon: Twitter,   href: 'https://twitter.com',   label: 'Twitter'   },
-                { icon: Facebook,  href: 'https://facebook.com',  label: 'Facebook'  },
-                { icon: Youtube,   href: 'https://youtube.com',   label: 'YouTube'   },
+                { icon: Instagram, href: 'https://www.instagram.com/exploreabanow?igsh=MWt2Z2plYTM5c2s2bQ==', label: 'Instagram' },
+                { icon: FaXTwitter,   href: 'https://vm.tiktok.com/ZS96sSujuLYD4-iu0Rl/',   label: 'X'   },
+                { icon: Facebook,  href: 'https://www.facebook.com/share/1BBMVYvXqY/',  label: 'Facebook'  },
+                { icon: FaTiktok,   href: 'https://vm.tiktok.com/ZS96sSujuLYD4-iu0Rl/',   label: 'TikTok'   },
               ].map(({ icon: Icon, href, label }) => (
                 <a
                   key={label}
@@ -153,7 +155,7 @@ const Footer = () => {
               <Mail size={13} /> support@exploreaba.ng
             </a>
             <span className="flex items-center gap-2">
-              <MapPin size={13} /> Ariaria International Market, Aba, Abia State, Nigeria
+              <MapPin size={13} /> Aba, Abia State, Nigeria
             </span>
           </div>
         </div>
