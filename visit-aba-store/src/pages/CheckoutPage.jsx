@@ -101,11 +101,10 @@ const CheckoutPage = () => {
     }
 
     const orderRequest = {
-      items: cartItems.map(item => ({ variantId: item.variantId, quantity: item.quantity })),
-      shippingAddress: address,
-      billingAddress: address,
-      paymentMethod: 'MONNIFY',
-    };
+  items: cartItems.map(item => ({ variantId: item.variantId, quantity: item.quantity })),
+  shippingAddress: address,
+  billingAddress: address,
+};
 
     try {
       const orderRes = await api.post('/v1/orders', orderRequest);
@@ -366,9 +365,12 @@ const CheckoutPage = () => {
               </button>
 
               {/* Trust Badges */}
-              <div className="mt-6 flex flex-col items-center justify-center gap-2 text-xs font-bold text-gray-400">
-                 <div className="flex items-center gap-1.5"><ShieldCheck size={16} className="text-green-500" /> 100% Encrypted Payment via Monnify</div>
-              </div>
+              <div className="flex items-center gap-1.5">
+  <ShieldCheck size={16} className="text-green-500" /> Bank-grade encrypted payment
+</div>
+<div className="flex items-center gap-1.5 text-gray-300">
+  Powered by Flutterwave · Paystack
+</div>
             </div>
           </div>
 

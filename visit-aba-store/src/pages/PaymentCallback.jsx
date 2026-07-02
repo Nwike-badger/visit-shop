@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, XCircle, Loader2, ArrowRight, ShieldAlert, Sparkles, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Loader2, ArrowRight, ShieldAlert, Sparkles, ArrowLeft } from 'lucide-react';
 import api from '../api/axiosConfig';
 import { useCart } from '../context/CartContext';
 
-const MAX_ATTEMPTS = 8;
+const MAX_ATTEMPTS = 10;         // ~30s of polling after the initial 2.5s delay
 const POLL_INTERVAL = 3000;
-const INITIAL_DELAY = 2500; 
+const INITIAL_DELAY = 2500;
+const SUCCESS_STATUSES = ['PROCESSING', 'CONFIRMED', 'SHIPPED', 'DELIVERED'];
 
 const PaymentCallback = () => {
   const [searchParams] = useSearchParams();
@@ -17,12 +18,26 @@ const PaymentCallback = () => {
   const [attemptCount, setAttemptCount] = useState(0);
   const timerRef = useRef(null);
 
-  const orderId = searchParams.get('reference') || searchParams.get('paymentReference');
-  const monnifyStatus = searchParams.get('paymentStatus'); 
-  const transactionRef = searchParams.get('transactionReference');
+  // reference/paymentReference cover Paystack & Monnify; tx_ref covers Flutterwave
+  const orderId =
+    searchParams.get('reference') ||
+    searchParams.get('paymentReference') ||
+    searchParams.get('tx_ref');
+
+  // These are ONLY read to fail-fast on explicit failure signals.
+  // Success is ALWAYS confirmed server-side via /v1/payments/verify — never here.
+  const monnifyStatus = searchParams.get('paymentStatus');     // "PAID" | "FAILED"
+  const flutterwaveStatus = searchParams.get('status');        // "successful" | "cancelled" | "failed"
+  const transactionRef =
+    searchParams.get('transactionReference') ||
+    searchParams.get('transaction_id');
 
   useEffect(() => {
-    if (!orderId || (monnifyStatus && monnifyStatus !== 'PAID')) {
+    const explicitFailure =
+      (monnifyStatus && monnifyStatus !== 'PAID') ||
+      (flutterwaveStatus && flutterwaveStatus !== 'successful');
+
+    if (!orderId || explicitFailure) {
       setStatus('failed');
       return;
     }
@@ -34,10 +49,11 @@ const PaymentCallback = () => {
       setAttemptCount(attempts);
 
       try {
-        const res = await api.get(`/v1/orders/verify/${orderId}`);
+        // Smart verify: fast path reads DB, slow path calls the gateway of record.
+        const res = await api.get(`/v1/payments/verify/${orderId}`);
         const orderStatus = res.data.status;
 
-        if (['PROCESSING', 'CONFIRMED', 'SHIPPED', 'DELIVERED'].includes(orderStatus)) {
+        if (SUCCESS_STATUSES.includes(orderStatus)) {
           await clearCart();
           refreshCart();
           setStatus('success');
@@ -60,15 +76,29 @@ const PaymentCallback = () => {
 
     timerRef.current = setTimeout(poll, INITIAL_DELAY);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [orderId, monnifyStatus, clearCart, refreshCart]); 
+  }, [orderId, monnifyStatus, flutterwaveStatus, clearCart, refreshCart]);
+
+  const handleRetry = async () => {
+    if (!orderId) { navigate('/checkout'); return; }
+    try {
+      // No ?gateway= — backend uses the order's saved gateway.
+      // (Add `?gateway=paystack` etc. if you build a "try a different gateway" picker here.)
+      const res = await api.post(`/v1/payments/retry/${orderId}`);
+      if (res.data?.checkoutUrl) {
+        window.location.href = res.data.checkoutUrl;
+        return;
+      }
+      navigate('/checkout');
+    } catch {
+      navigate('/checkout');
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center font-sans px-4 bg-gray-50/50 relative overflow-hidden">
-      
-      {/* Subtle Background Glow for premium feel */}
+
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* ── 1. Verifying State ───────────────────────────────────────────── */}
       {status === 'verifying' && (
         <div className="flex flex-col items-center bg-white p-10 sm:p-14 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-gray-100 max-w-md w-full text-center relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="relative w-24 h-24 mb-8 flex items-center justify-center">
@@ -77,12 +107,12 @@ const PaymentCallback = () => {
                <Loader2 size={36} className="text-blue-600 animate-spin" />
              </div>
           </div>
-          
+
           <h2 className="text-2xl font-black text-gray-900 mb-3 tracking-tight">Securing Your Order</h2>
           <p className="text-gray-500 text-sm mb-8 font-medium">
             Please don't close this window. We are confirming your payment with the bank.
           </p>
-          
+
           {attemptCount > 1 && (
             <div className="w-full bg-gray-50 rounded-2xl p-4 border border-gray-100">
               <div className="flex justify-between items-center mb-2 px-1">
@@ -100,7 +130,6 @@ const PaymentCallback = () => {
         </div>
       )}
 
-      {/* ── 2. Success State ─────────────────────────────────────────────── */}
       {status === 'success' && (
         <div className="flex flex-col items-center bg-white p-10 sm:p-14 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-gray-100 max-w-md w-full text-center relative z-10 animate-in zoom-in-95 duration-500">
           <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6 border border-green-100">
@@ -125,7 +154,6 @@ const PaymentCallback = () => {
             >
               Track Order
             </Link>
-            {/* The "Really Good" Home Alternative */}
             <Link
               to="/products"
               className="flex-1 bg-blue-50 text-blue-700 border border-blue-100 py-4 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors flex justify-center items-center gap-2 group"
@@ -136,7 +164,6 @@ const PaymentCallback = () => {
         </div>
       )}
 
-      {/* ── 3. Failed State ──────────────────────────────────────────────── */}
       {status === 'failed' && (
         <div className="flex flex-col items-center bg-white p-10 sm:p-14 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-gray-100 max-w-md w-full text-center relative z-10 animate-in shake duration-500">
           <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mb-6 border border-red-100">
@@ -146,18 +173,10 @@ const PaymentCallback = () => {
           <p className="text-gray-500 font-medium mb-8 text-sm leading-relaxed">
             We couldn't authorize your payment. No worries, your items are still saved in your cart. If you were debited, it will be automatically reversed.
           </p>
-          
+
           <div className="flex flex-col gap-3 w-full mb-6">
             <button
-              onClick={async () => {
-                if (!orderId) { navigate('/checkout'); return; }
-                try {
-                  const res = await api.post(`/v1/payments/retry/${orderId}`);
-                  if (res.data?.checkoutUrl) window.location.href = res.data.checkoutUrl;
-                } catch {
-                  navigate('/checkout');
-                }
-              }}
+              onClick={handleRetry}
               className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold text-sm hover:bg-black hover:shadow-lg transition-all flex justify-center items-center gap-2"
             >
               Try Another Method <ArrowRight size={16} />
@@ -170,7 +189,6 @@ const PaymentCallback = () => {
             </button>
           </div>
 
-          {/* Gentle Escape Hatch */}
           <Link to="/products" className="text-xs font-bold text-gray-400 hover:text-gray-900 inline-flex items-center gap-1 transition-colors">
              <ArrowLeft size={12} /> Return to storefront
           </Link>
