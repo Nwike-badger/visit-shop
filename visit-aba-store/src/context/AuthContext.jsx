@@ -6,7 +6,7 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import api, { TOKEN_KEY } from '../api/axiosConfig';
+import api, { TOKEN_KEY, setAuthTokens, clearAuthTokens } from '../api/axiosConfig';
 import { toast } from 'react-hot-toast';
 
 const AuthContext = createContext();
@@ -16,30 +16,32 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-
   const logout = useCallback((showToast = true) => {
-    localStorage.removeItem(TOKEN_KEY);
+    // Best-effort server logout — deletes the refresh token so it can't be reused.
+    // Token passed explicitly because we clear storage on the very next line.
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) {
+      api.post('/v1/auth/logout', {}, { headers: { Authorization: `Bearer ${token}` } })
+         .catch(() => {}); // ignore failures; local sign-out happens regardless
+    }
+
+    clearAuthTokens();
     setUser(null);
     setIsAuthenticated(false);
 
     if (showToast) {
-      toast("You've been signed out. See you soon! 👋", {
-        duration: 3000,
-      });
+      toast("You've been signed out. See you soon! 👋", { duration: 3000 });
     }
-    // Navigation is left to the calling component so it can use React Router.
   }, []);
 
   // ─── login ───────────────────────────────────────────────────────────────
-  const login = useCallback(async (token, userData = null) => {
-    localStorage.setItem(TOKEN_KEY, token);
+  const login = useCallback(async (accessToken, refreshToken = null, userData = null) => {
+    setAuthTokens(accessToken, refreshToken);
     setIsAuthenticated(true);
 
     if (userData) {
-      // Caller already holds the user object — use it directly.
       setUser(userData);
     } else {
-      // Fallback: fetch the profile from the server.
       try {
         const res = await api.get('/v1/users/me');
         setUser(res.data);
@@ -51,30 +53,27 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // ─── Cold-start session restore ──────────────────────────────────────────
-  // Runs once on mount to rehydrate auth state from localStorage.
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem(TOKEN_KEY);
-
       if (token) {
         try {
+          // If the access token is expired, the interceptor silently refreshes
+          // and this still succeeds — the user stays logged in.
           const res = await api.get('/v1/users/me');
           setUser(res.data);
           setIsAuthenticated(true);
         } catch (error) {
-          // Token is expired or invalid — clear it silently (no toast on cold start).
           console.error('Auth check failed:', error);
           logout(false);
         }
       }
-
       setLoading(false);
     };
 
     initAuth();
   }, [logout]);
 
-  
   const updateUser = useCallback((newUserData) => {
     setUser(newUserData);
   }, []);

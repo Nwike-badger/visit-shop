@@ -54,8 +54,8 @@ const SignupPage = () => {
     const guestId = localStorage.getItem('guest_cart_id');
     try {
       const response = await api.post('/v1/auth/google', { token: credentialResponse.credential, guestId });
-      const { accessToken } = response.data;
-      await login(accessToken);
+      const { accessToken, refreshToken } = response.data;
+await login(accessToken, refreshToken);
       localStorage.removeItem('guest_cart_id');
       refreshCart();
       toast.success("Account successfully created with Google!");

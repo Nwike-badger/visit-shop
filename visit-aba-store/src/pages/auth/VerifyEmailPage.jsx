@@ -30,10 +30,11 @@ const VerifyEmailPage = () => {
     api.post('/v1/auth/verify-email', { token })
       .then(async (res) => {
         const accessToken = res.data?.accessToken;
+        const refreshToken = res.data?.refreshToken;
         setStatus('success');
         if (accessToken) {
           // Seamless: store the session + load the profile, then drop them into the store logged in.
-          await login(accessToken);
+          await login(accessToken, refreshToken);
           setTimeout(() => navigate('/', { replace: true }), 1600);
         } else {
           // Fallback (verified but no token returned) — send to login.
