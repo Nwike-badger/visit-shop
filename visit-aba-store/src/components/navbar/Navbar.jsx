@@ -125,21 +125,23 @@ const Navbar = () => {
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4 lg:gap-8">
 
           {/* ── LOGO ── always leftmost on all viewports ── */}
-          <div className="flex items-center shrink-0">
-            <Link to="/" className="flex items-center gap-2 group">
-              <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-green-700 text-white shadow-md transform group-hover:scale-105 transition-all duration-300">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                    d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-              </div>
-              <div className="text-2xl font-black tracking-tighter">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-700 to-emerald-500">Explore</span>
-                <span className="text-gray-900">Aba</span>
-                <span className="text-emerald-500">.</span>
-              </div>
-            </Link>
-          </div>
+<div className="flex items-center shrink-0 -ms-3 sm:-ms-6">
+  <Link to="/" className="flex items-center gap-1 group">
+    <img
+      src="/exploreaba-cart-logo.png"
+      alt="Explore Aba"
+      className="h-12 sm:h-14 lg:h-16 w-auto object-contain -mr-5 sm:-mr-6 transform group-hover:scale-105 transition-transform duration-300"
+    />
+
+    <div className="text-2xl font-black tracking-tighter">
+      <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-700 to-emerald-500">
+        Explore
+      </span>
+      <span className="text-gray-900">Aba</span>
+      <span className="text-emerald-500">.</span>
+    </div>
+  </Link>
+</div>
 
           {/* ── DESKTOP: search + category dropdown ── */}
           <div className="hidden lg:flex flex-1 items-center gap-6 max-w-4xl mx-auto">
