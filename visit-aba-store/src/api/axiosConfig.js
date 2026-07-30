@@ -7,7 +7,6 @@ export const REFRESH_TOKEN_KEY = 'refreshToken';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-// ─── Token persistence (single source of truth) ──────────────────────────────
 export const setAuthTokens = (accessToken, refreshToken) => {
   if (accessToken) localStorage.setItem(TOKEN_KEY, accessToken);
   if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
@@ -18,7 +17,6 @@ export const clearAuthTokens = () => {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 };
 
-// ─── Helper: is a JWT expired ────────────────────────────────────────────────
 const isTokenExpired = (token) => {
   try {
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
@@ -33,7 +31,6 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ─── Request Interceptor ──────────────────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -50,12 +47,10 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ─── Response Interceptor: silent refresh on 401 ─────────────────────────────
 let sessionExpiredToastShown = false;
 let isRefreshing = false;
 let refreshQueue = [];
 
-// Requests that arrived mid-refresh wait here, then retry with the new token.
 const flushQueue = (newToken) => {
   refreshQueue.forEach(({ resolve, reject, originalRequest }) => {
     if (newToken) {
@@ -95,11 +90,18 @@ api.interceptors.response.use(
     const token = localStorage.getItem(TOKEN_KEY);
     const isAuthFlow = url.includes('/v1/auth/');
 
-    // ── 401 → try one silent refresh, then replay the original request ──
-    if (status === 401 && token && !isAuthFlow && !originalRequest._retry) {
+    // Spring returns 403 (not 401) on a role-gated or authenticated() route once
+    // the JWT filter clears an expired token's context — there's no custom entry
+    // point configured, so it falls back to Http403ForbiddenEntryPoint. A 403 on
+    // a token that's actually expired is an auth problem in disguise, not a real
+    // "you don't have access" — treat it exactly like a 401.
+    const isAuthFailure =
+      status === 401 || (status === 403 && token && isTokenExpired(token));
+
+    // ── Looks like an expired/invalid token → try one silent refresh, then replay ──
+    if (isAuthFailure && token && !isAuthFlow && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      // A refresh is already running — park this request until it resolves.
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           originalRequest.__error = error;
@@ -117,7 +119,6 @@ api.interceptors.response.use(
       }
 
       try {
-        // Bare axios (NOT `api`) so a failing refresh can't re-enter this interceptor.
         const { data } = await axios.post(`${BASE_URL}/v1/auth/refresh`, { refreshToken });
         setAuthTokens(data.accessToken, data.refreshToken);
         isRefreshing = false;
@@ -132,22 +133,18 @@ api.interceptors.response.use(
       }
     }
 
-    // ── 401 that a refresh couldn't fix (already retried) → sign out ──
-    if (status === 401 && token && !isAuthFlow) {
+    // ── Already retried and still failing → refresh couldn't fix it, sign out ──
+    if (isAuthFailure && token && !isAuthFlow) {
       handleSessionExpired();
       return Promise.reject(error);
     }
 
-    // ── 403 handling (unchanged) ──
-    if (status === 403) {
-      if (token && isTokenExpired(token)) {
-        handleSessionExpired();
-      } else if (!isAuthFlow) {
-        toast("You don't have access to do that. If you think this is a mistake, please contact support.", {
-          icon: '🚫',
-          duration: 5000,
-        });
-      }
+    // ── Genuine access-denied: valid token, just lacking the required role ──
+    if (status === 403 && !isAuthFlow && !(token && isTokenExpired(token))) {
+      toast("You don't have access to do that. If you think this is a mistake, please contact support.", {
+        icon: '🚫',
+        duration: 5000,
+      });
     }
 
     return Promise.reject(error);
