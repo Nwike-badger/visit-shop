@@ -52,21 +52,15 @@ const buildUnsplashUrl = (url, width, quality) => {
   return result;
 };
 
-/**
- * Cloudinary: inserts a transformation segment right after /upload/
- * e.g. …/upload/v123/products/shoe.jpg
- *   → …/upload/w_400,q_75,f_auto/v123/products/shoe.jpg
- *
- * If your URLs already have a transformation segment (e.g. /upload/t_thumb/)
- * this replaces it so you always get the right size.
- */
+/// A transformation segment looks like "w_400,q_75/" or "t_thumb/":
+// 1-3 letters, an underscore, then params. The version ("v123") and folder
+// names have no such underscore, so they are never mistaken for one.
+const TRANSFORM_SEGMENT = /\/upload\/(?:[a-z]{1,3}_[^/]*\/)+/;
+
 const buildCloudinaryUrl = (url, width, quality) => {
   const transform = `w_${width},q_${quality},f_auto,c_fill`;
-  // Remove any existing transformation segment then re-insert
-  return url.replace(
-    /\/upload\/((?:[a-z_,0-9]+\/)+)?/,
-    `/upload/${transform}/`
-  );
+  const base = url.replace(TRANSFORM_SEGMENT, '/upload/'); // drop old transforms only
+  return base.replace('/upload/', `/upload/${transform}/`); // insert ours
 };
 
 /**
