@@ -16,10 +16,10 @@ const useProducts = (page = 0, size = 20) => {
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
+    setError(null); // clear any previous failure so a successful retry actually shows products
     try {
       // Pass the pagination parameters to your Spring Boot backend
       const res = await api.get(`/products?page=${page}&size=${size}`);
-      
       if (res.data && res.data.content) {
         setProducts(res.data.content);
         setPageInfo({
@@ -44,6 +44,14 @@ const useProducts = (page = 0, size = 20) => {
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // While in an error state, retry automatically once the browser is back online
+  useEffect(() => {
+    if (!error) return;
+    const retry = () => fetchProducts();
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [error, fetchProducts]);
 
   return { products, pageInfo, loading, error, refetch: fetchProducts };
 };

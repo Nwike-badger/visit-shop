@@ -23,6 +23,8 @@ import CategoryPage from "./pages/CategoryPage";
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+import BrandsPage from "./pages/BrandsPage";
+import BrandPage from "./pages/BrandPage";
 
 // ── NEW: Legal, About & Contact pages ───────────────────────────────
 import LegalPage   from "./pages/LegalPage";
@@ -64,6 +66,8 @@ function App() {
                     <Route path="/wishlist" element={<Wishlist />} />
                     <Route path="/product/:id" element={<ProductPage />} />
                     <Route path="/category/:slug" element={<CategoryPage />} />
+                    <Route path="/brands" element={<BrandsPage />} />
+                    <Route path="/brand/:slug" element={<BrandPage />} />
                     <Route path="/checkout" element={<CheckoutPage />} />
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/signup" element={<SignupPage />} />
