@@ -7,10 +7,10 @@ import {
   FolderTree, Plus, Pencil, Trash2, ChevronRight, ChevronDown,
   Loader2, X, Image as ImageIcon, FolderOpen, Folder,
   Search, RefreshCw, AlertTriangle, ArrowLeft, Hash,
-  CornerDownRight, Layers, ShieldAlert, CheckCircle2,
+  CornerDownRight, Layers, ShieldAlert, CheckCircle2, Lock,
 } from 'lucide-react';
 import { getErr } from '../utils';
-import { Card, CardHeader, CardBody, Field } from '../SharedUI';
+import { Card, CardHeader, Field } from '../SharedUI';
 
 /* ─────────────────────────────────────────────────────────────────
    Utilities
@@ -80,6 +80,15 @@ const findParentNode = (nodes, targetSlug, parent = null) => {
   return undefined;
 };
 
+/** Stops the page behind a popup from scrolling while the popup is open */
+const useLockBodyScroll = () => {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+};
+
 /* ─────────────────────────────────────────────────────────────────
    Depth colour palette
 ───────────────────────────────────────────────────────────────── */
@@ -103,12 +112,8 @@ function TreeNode({ node, depth, expanded, toggleExpand, onEdit, onAddChild, onD
 
   return (
     <div className="select-none">
-      <div
-        className={`
-          group relative flex items-center gap-2 px-3 py-2.5 rounded-xl
-          hover:bg-slate-50/80 transition-colors
-        `}
-      >
+      <div className="group relative flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-slate-50/80 transition-colors">
+
         {/* ── Expand / leaf indicator ── */}
         <button
           onClick={() => hasChildren && toggleExpand(node.id)}
@@ -158,7 +163,6 @@ function TreeNode({ node, depth, expanded, toggleExpand, onEdit, onAddChild, onD
 
         {/* ── Action buttons (appear on row hover) ── */}
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
-          {/* Add child */}
           <button
             type="button"
             onClick={() => onAddChild(node)}
@@ -168,7 +172,6 @@ function TreeNode({ node, depth, expanded, toggleExpand, onEdit, onAddChild, onD
             <Plus size={13} />
           </button>
 
-          {/* Edit */}
           <button
             type="button"
             onClick={() => onEdit(node)}
@@ -178,7 +181,6 @@ function TreeNode({ node, depth, expanded, toggleExpand, onEdit, onAddChild, onD
             <Pencil size={13} />
           </button>
 
-          {/* Delete — disabled (with tooltip) when category has children */}
           <button
             type="button"
             onClick={() => onDelete(node)}
@@ -199,9 +201,8 @@ function TreeNode({ node, depth, expanded, toggleExpand, onEdit, onAddChild, onD
       {/* ── Children with visual connector ── */}
       {hasChildren && isExpanded && (
         <div className="relative ml-[22px] pl-4 border-l-2 border-slate-100">
-          {node.children.map((child, idx) => (
+          {node.children.map((child) => (
             <div key={child.id} className="relative">
-              {/* Horizontal connector tick */}
               <div className="absolute -left-4 top-[21px] w-4 h-px bg-slate-200" />
               <TreeNode
                 node={child}
@@ -222,8 +223,11 @@ function TreeNode({ node, depth, expanded, toggleExpand, onEdit, onAddChild, onD
 
 /* ─────────────────────────────────────────────────────────────────
    Category Form Modal (Create + Edit)
+   Header and footer stay fixed; the middle scrolls on small screens.
 ───────────────────────────────────────────────────────────────── */
 function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, saving }) {
+  useLockBodyScroll();
+
   const isEdit = mode === 'edit';
   const INP    = 'w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-300';
 
@@ -251,17 +255,23 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
   const canSubmit = form.name.trim() && form.slug.trim();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-[520px] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl w-full max-w-[520px] max-h-[calc(100vh-2rem)] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        onClick={e => e.stopPropagation()}
+      >
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-600/30">
+        {/* Header (fixed) */}
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-600/30 shrink-0">
               <FolderTree size={16} className="text-white" />
             </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm leading-none">
+            <div className="min-w-0">
+              <h3 className="font-bold text-slate-900 text-sm leading-none truncate">
                 {isEdit
                   ? `Edit "${initialData?.name}"`
                   : initialData?.parentName
@@ -269,7 +279,7 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
                     : 'New Root Category'}
               </h3>
               {isEdit && (
-                <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
                   /{initialData?.slug}
                 </p>
               )}
@@ -277,17 +287,17 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
           >
             <X size={17} />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-4">
+        {/* Body (scrolls) */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-4">
 
           {/* Parent breadcrumb (informational) */}
-          {(form.parentSlug || initialData?.parentName) && (
+          {form.parentSlug && (
             <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
               <CornerDownRight size={11} className="text-slate-400" />
               <span className="text-slate-400">Will be nested under</span>
@@ -308,19 +318,22 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
             />
           </Field>
 
-          {/* Slug */}
+          {/* Slug — locked when editing (the backend never changes a slug) */}
           <Field
             label="URL Slug"
             hint={isEdit
-              ? '⚠ Changing the slug may break existing links and cached references.'
+              ? 'The slug cannot be changed after creation — products and links depend on it.'
               : 'Auto-generated from name — click to customise.'}
           >
             <div className="relative">
-              <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {isEdit
+                ? <Lock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                : <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />}
               <input
                 value={form.slug}
+                readOnly={isEdit}
                 onChange={e => { setSlugManual(true); setF({ slug: slugify(e.target.value) }); }}
-                className={`${INP} pl-8 font-mono text-[13px]`}
+                className={`${INP} pl-8 font-mono text-[13px] ${isEdit ? 'text-slate-400 cursor-not-allowed' : ''}`}
                 placeholder="mens-outerwear"
               />
             </div>
@@ -334,7 +347,7 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
           {/* Parent category */}
           <Field
             label="Parent Category"
-            hint="Change to nest under a different parent, or clear to make this a root category."
+            hint="Change to nest under a different parent, or choose None to make this a top-level category. Its products and sub-categories move with it."
           >
             <select
               value={form.parentSlug}
@@ -384,12 +397,12 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
           </Field>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/60">
+        {/* Footer (fixed) */}
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/60">
           <p className="text-[10px] text-slate-400">
             {isEdit ? 'Saving updates the category tree immediately.' : 'New category will appear in the tree instantly.'}
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 ml-auto">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
@@ -417,16 +430,24 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
    Delete Confirmation Dialog
 ───────────────────────────────────────────────────────────────── */
 function DeleteDialog({ category, onConfirm, onClose, deleting }) {
-  const hasChildren    = (category.children || []).length > 0;
-  const childCount     = category.children?.length || 0;
+  useLockBodyScroll();
+
+  const hasChildren     = (category.children || []).length > 0;
+  const childCount      = category.children?.length || 0;
   const descendantCount = countDescendants(category);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl w-full max-w-sm max-h-[calc(100vh-2rem)] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        onClick={e => e.stopPropagation()}
+      >
 
         {/* Warning / Error header */}
-        <div className={`px-6 py-5 flex items-start gap-4 ${hasChildren ? 'bg-amber-50 border-b border-amber-100' : 'bg-red-50 border-b border-red-100'}`}>
+        <div className={`flex-1 min-h-0 overflow-y-auto px-6 py-5 flex items-start gap-4 ${hasChildren ? 'bg-amber-50 border-b border-amber-100' : 'bg-red-50 border-b border-red-100'}`}>
           {hasChildren
             ? <ShieldAlert size={22} className="text-amber-500 shrink-0 mt-0.5" />
             : <AlertTriangle size={22} className="text-red-500 shrink-0 mt-0.5" />}
@@ -446,7 +467,8 @@ function DeleteDialog({ category, onConfirm, onClose, deleting }) {
               ) : (
                 <>
                   <strong>"{category.name}"</strong> will be permanently removed from your
-                  category tree. This action cannot be undone.
+                  category tree. This action cannot be undone. If it still has products,
+                  the server will refuse — move them to another category first.
                 </>
               )}
             </p>
@@ -454,7 +476,7 @@ function DeleteDialog({ category, onConfirm, onClose, deleting }) {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-6 py-4">
+        <div className="shrink-0 flex justify-end gap-2 px-6 py-4">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
@@ -498,8 +520,7 @@ export default function CategoryManager({ onBack }) {
       const res = await api.get('/categories/tree');
       const data = res.data || [];
       setCategories(data);
-      // Auto-expand root level
-      setExpanded(new Set(data.map(c => c.id)));
+      setExpanded(new Set(data.map(c => c.id)));   // auto-expand root level
     } catch {
       toast.error('Failed to load categories');
     } finally {
@@ -513,30 +534,10 @@ export default function CategoryManager({ onBack }) {
   const stats = useMemo(() => {
     const { total, subs, maxDepth } = computeStats(categories);
     return [
-      {
-        label: 'Total categories',
-        val: total,
-        color: 'text-slate-800',
-        bg: 'bg-white border-slate-200',
-      },
-      {
-        label: 'Root categories',
-        val: categories.length,
-        color: 'text-blue-700',
-        bg: 'bg-blue-50 border-blue-200',
-      },
-      {
-        label: 'Sub-categories',
-        val: subs,
-        color: 'text-violet-700',
-        bg: 'bg-violet-50 border-violet-200',
-      },
-      {
-        label: 'Max depth',
-        val: maxDepth,
-        color: 'text-emerald-700',
-        bg: 'bg-emerald-50 border-emerald-200',
-      },
+      { label: 'Total categories', val: total,             color: 'text-slate-800',   bg: 'bg-white border-slate-200' },
+      { label: 'Root categories',  val: categories.length, color: 'text-blue-700',    bg: 'bg-blue-50 border-blue-200' },
+      { label: 'Sub-categories',   val: subs,              color: 'text-violet-700',  bg: 'bg-violet-50 border-violet-200' },
+      { label: 'Max depth',        val: maxDepth,          color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
     ];
   }, [categories]);
 
@@ -603,11 +604,11 @@ export default function CategoryManager({ onBack }) {
         await api.post('/categories', payload);
         toast.success(`"${form.name}" created!`);
       } else {
-        // Passing empty string parentSlug means "make root"
+        // Backend rule: '' = make top-level, a slug = move under it, null = leave alone.
+        // Always send the form's choice so "None (Root)" actually promotes the category.
         await api.put(`/categories/${modal.initialData.slug}`, {
           ...payload,
-          // Backend interprets empty-string vs null differently for root promotion
-          parentSlug: form.parentSlug === '' ? null : form.parentSlug,
+          parentSlug: form.parentSlug || '',
         });
         toast.success(`"${form.name}" updated!`);
       }
@@ -727,15 +728,9 @@ export default function CategoryManager({ onBack }) {
 
         {/* ── Legend ── */}
         <div className="flex items-center gap-4 text-[10px] text-slate-400 font-medium px-1">
-          <span className="flex items-center gap-1.5">
-            <Plus size={10} className="text-blue-500" /> Add child
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Pencil size={10} /> Edit
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Trash2 size={10} className="text-slate-300" /> Delete (disabled if has children)
-          </span>
+          <span className="flex items-center gap-1.5"><Plus size={10} className="text-blue-500" /> Add child</span>
+          <span className="flex items-center gap-1.5"><Pencil size={10} /> Edit</span>
+          <span className="flex items-center gap-1.5"><Trash2 size={10} className="text-slate-300" /> Delete (disabled if has children)</span>
           <span className="ml-auto">Hover a row to see actions</span>
         </div>
 

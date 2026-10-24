@@ -1,11 +1,15 @@
 import React from 'react';
 import {
   Package, Plus, Search, RefreshCw, X, Loader2,
-  Image as ImageIcon, CheckCircle, EyeOff, Trash2,
+  Image as ImageIcon, CheckCircle, Trash2,
   TrendingUp, AlertTriangle,
 } from 'lucide-react';
 import { fmt, isActive } from './utils';
 import { Card } from './SharedUI';
+
+// The list API returns minPrice/basePrice and totalStock (not price/stockQuantity).
+const priceOf = (p) => p.minPrice ?? p.basePrice ?? 0;
+const stockOf = (p) => p.totalStock ?? 0;
 
 export default function ProductList({ products, loading, search, setSearch, deleting, onRefresh, onAdd, onEdit, onDelete }) {
   const filtered = products.filter(p =>
@@ -33,14 +37,14 @@ export default function ProductList({ products, loading, search, setSearch, dele
     },
     {
       label: 'Low stock',
-      val: products.filter(p => (p.stockQuantity || 0) > 0 && (p.stockQuantity || 0) <= 10).length,
+      val: products.filter(p => stockOf(p) > 0 && stockOf(p) <= 10).length,
       icon: <AlertTriangle size={16} />,
       color: 'text-amber-600',
       bg: 'bg-amber-50 border-amber-200',
     },
     {
       label: 'Out of stock',
-      val: products.filter(p => (p.stockQuantity || 0) === 0).length,
+      val: products.filter(p => stockOf(p) === 0).length,
       icon: <TrendingUp size={16} />,
       color: 'text-red-600',
       bg: 'bg-red-50 border-red-200',
@@ -137,94 +141,97 @@ export default function ProductList({ products, loading, search, setSearch, dele
                       </p>
                     </td>
                   </tr>
-                ) : filtered.map(p => (
-                  <tr
-                    key={p.id}
-                    onClick={() => onEdit(p.id)}
-                    className="border-t border-slate-50 hover:bg-slate-50/80 cursor-pointer transition-colors group"
-                  >
-                    {/* Product */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 group-hover:border-slate-300 transition-colors">
-                          {p.images?.[0] ? (
-                            <img
-                              src={p.images[0].url}
-                              alt=""
-                              className="w-full h-full object-cover"
-                              onError={e => { e.target.style.display = 'none'; }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <ImageIcon size={13} className="text-slate-300" />
-                            </div>
-                          )}
+                ) : filtered.map(p => {
+                  const stock = stockOf(p);
+                  return (
+                    <tr
+                      key={p.id}
+                      onClick={() => onEdit(p.id)}
+                      className="border-t border-slate-50 hover:bg-slate-50/80 cursor-pointer transition-colors group"
+                    >
+                      {/* Product */}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 group-hover:border-slate-300 transition-colors">
+                            {p.images?.[0] ? (
+                              <img
+                                src={p.images[0].url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={e => { e.target.style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <ImageIcon size={13} className="text-slate-300" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 text-sm truncate max-w-[220px] group-hover:text-blue-700 transition-colors">
+                              {p.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono">/{p.slug}</p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-900 text-sm truncate max-w-[220px] group-hover:text-blue-700 transition-colors">
-                            {p.name}
-                          </p>
-                          <p className="text-[10px] text-slate-400 font-mono">/{p.slug}</p>
-                        </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Category / Brand */}
-                    <td className="px-5 py-3.5">
-                      {p.categoryName
-                        ? <p className="text-xs font-semibold text-slate-700">{p.categoryName}</p>
-                        : <p className="text-xs text-slate-300">—</p>}
-                      {p.brandName && <p className="text-[11px] text-slate-400">{p.brandName}</p>}
-                    </td>
+                      {/* Category / Brand */}
+                      <td className="px-5 py-3.5">
+                        {p.categoryName
+                          ? <p className="text-xs font-semibold text-slate-700">{p.categoryName}</p>
+                          : <p className="text-xs text-slate-300">—</p>}
+                        {p.brandName && <p className="text-[11px] text-slate-400">{p.brandName}</p>}
+                      </td>
 
-                    {/* Price */}
-                    <td className="px-5 py-3.5">
-                      <p className="font-bold text-slate-900 text-sm">₦{fmt(p.price)}</p>
-                      {p.compareAtPrice > 0 && (
-                        <p className="text-[10px] text-slate-400 line-through">₦{fmt(p.compareAtPrice)}</p>
-                      )}
-                    </td>
+                      {/* Price */}
+                      <td className="px-5 py-3.5">
+                        <p className="font-bold text-slate-900 text-sm">₦{fmt(priceOf(p))}</p>
+                        {p.compareAtPrice > 0 && (
+                          <p className="text-[10px] text-slate-400 line-through">₦{fmt(p.compareAtPrice)}</p>
+                        )}
+                      </td>
 
-                    {/* Stock */}
-                    <td className="px-5 py-3.5">
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                        (p.stockQuantity || 0) === 0
-                          ? 'bg-red-50 text-red-600'
-                          : (p.stockQuantity || 0) <= 10
-                          ? 'bg-amber-50 text-amber-700'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {(p.stockQuantity || 0) === 0 ? 'Out of stock' : `${p.stockQuantity} units`}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-5 py-3.5">
-                      {isActive(p) ? (
-                        <span className="text-xs font-bold text-green-600 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Active
+                      {/* Stock */}
+                      <td className="px-5 py-3.5">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                          stock === 0
+                            ? 'bg-red-50 text-red-600'
+                            : stock <= 10
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {stock === 0 ? 'Out of stock' : `${stock} units`}
                         </span>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300 inline-block" /> Draft
-                        </span>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* Delete */}
-                    <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={e => onDelete(p.id, e)}
-                        disabled={deleting[p.id]}
-                        className="p-1.5 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        {deleting[p.id]
-                          ? <Loader2 size={14} className="animate-spin" />
-                          : <Trash2 size={14} />}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      {/* Status */}
+                      <td className="px-5 py-3.5">
+                        {isActive(p) ? (
+                          <span className="text-xs font-bold text-green-600 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Active
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 inline-block" /> Draft
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Delete */}
+                      <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={e => onDelete(p.id, e)}
+                          disabled={deleting[p.id]}
+                          className="p-1.5 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          {deleting[p.id]
+                            ? <Loader2 size={14} className="animate-spin" />
+                            : <Trash2 size={14} />}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

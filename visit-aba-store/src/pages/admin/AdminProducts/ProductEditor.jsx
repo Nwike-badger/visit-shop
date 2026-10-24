@@ -54,13 +54,19 @@ export default function ProductEditor({ productId, onBack, categories, brands })
 
         slugEdited.current = true;
 
+        // When a discount is active, the backend stores the DISCOUNTED price in
+        // basePrice and the ORIGINAL price in compareAtPrice. Load the original
+        // so saving doesn't apply the discount a second time.
+        const hasDiscount   = (p.discount ?? 0) > 0;
+        const originalPrice = hasDiscount && p.compareAtPrice ? p.compareAtPrice : p.basePrice;
+
         setF({
           name:           p.name           || '',
           slug:           p.slug           || '',
           description:    p.description    || '',
-          basePrice:      p.basePrice      ?? '',
-          compareAtPrice: p.compareAtPrice ?? '',
-          discount:       p.discount > 0   ? String(p.discount) : '',
+          basePrice:      originalPrice    ?? '',
+          compareAtPrice: hasDiscount ? '' : (p.compareAtPrice ?? ''),
+          discount:       hasDiscount      ? String(p.discount) : '',
           categorySlug:   p.categorySlug   || '',
           brandSlug:      p.brand?.slug    || brands.find(b => b.name === p.brandName)?.slug || '',
           tags:           Array.isArray(p.tags) ? p.tags.join(', ') : '',
