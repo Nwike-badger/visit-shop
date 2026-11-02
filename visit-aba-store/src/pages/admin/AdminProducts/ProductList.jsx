@@ -7,9 +7,9 @@ import {
 import { fmt, isActive } from './utils';
 import { Card } from './SharedUI';
 
-// The list API returns minPrice/basePrice and totalStock (not price/stockQuantity).
-const priceOf = (p) => p.minPrice ?? p.basePrice ?? 0;
-const stockOf = (p) => p.totalStock ?? 0;
+// The list API returns `price` and `stockQuantity`; fall back to the raw fields just in case.
+const priceOf = (p) => p.price ?? p.minPrice ?? p.basePrice ?? 0;
+const stockOf = (p) => p.stockQuantity ?? p.totalStock ?? 0;
 
 export default function ProductList({ products, loading, search, setSearch, deleting, onRefresh, onAdd, onEdit, onDelete }) {
   const filtered = products.filter(p =>
