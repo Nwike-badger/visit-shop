@@ -21,6 +21,10 @@ const slugify = (s = '') =>
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
 
+/** Suggested slug: parent slug + name, so "Shirts" under Men → "men-shirts" */
+const autoSlug = (name, parentSlug) =>
+  slugify(parentSlug ? `${parentSlug}-${name}` : name);
+
 /**
  * Flatten tree preserving depth + excluding a slug (to prevent
  * self-parenting or circular references).
@@ -243,8 +247,15 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
   const setF = (patch) => setForm(f => ({ ...f, ...patch }));
 
   const handleNameChange = (val) => {
-    setF({ name: val, ...(!slugManual ? { slug: slugify(val) } : {}) });
+    setF({ name: val, ...(!slugManual ? { slug: autoSlug(val, form.parentSlug) } : {}) });
   };
+
+  // When creating, picking a different parent refreshes the suggested slug
+  useEffect(() => {
+    if (!isEdit && !slugManual && form.name) {
+      setF({ slug: autoSlug(form.name, form.parentSlug) });
+    }
+  }, [form.parentSlug]); // eslint-disable-line
 
   /* Flat list excluding self (prevent circular parenting) */
   const flatOptions = useMemo(
@@ -308,12 +319,16 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
           )}
 
           {/* Name */}
-          <Field label="Category Name" required>
+          <Field
+            label="Category Name"
+            required
+            hint="The same name can be used under different parents, e.g. 'Shirts' under Men and under Women."
+          >
             <input
               value={form.name}
               onChange={e => handleNameChange(e.target.value)}
               className={INP}
-              placeholder="e.g. Men's Outerwear"
+              placeholder="e.g. Shirts"
               autoFocus
             />
           </Field>
@@ -323,7 +338,7 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
             label="URL Slug"
             hint={isEdit
               ? 'The slug cannot be changed after creation — products and links depend on it.'
-              : 'Auto-generated from name — click to customise.'}
+              : 'Auto-generated from the parent and name — click to customise. Must be unique.'}
           >
             <div className="relative">
               {isEdit
@@ -334,12 +349,12 @@ function CategoryFormModal({ mode, initialData, allCategories, onSave, onClose, 
                 readOnly={isEdit}
                 onChange={e => { setSlugManual(true); setF({ slug: slugify(e.target.value) }); }}
                 className={`${INP} pl-8 font-mono text-[13px] ${isEdit ? 'text-slate-400 cursor-not-allowed' : ''}`}
-                placeholder="mens-outerwear"
+                placeholder="men-shirts"
               />
             </div>
             {form.slug && (
               <p className="text-[10px] text-slate-400 mt-1">
-                Path: <span className="text-slate-600 font-mono">/categories/{form.slug}</span>
+                Path: <span className="text-slate-600 font-mono">/category/{form.slug}</span>
               </p>
             )}
           </Field>

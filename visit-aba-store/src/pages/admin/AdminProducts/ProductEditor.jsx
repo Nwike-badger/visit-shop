@@ -232,6 +232,7 @@ export default function ProductEditor({ productId, onBack, categories, brands })
     setSpecs(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
 
   // ── Save ────────────────────────────────────────────────────────────────────
+    // ── Save ────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!form.name.trim())  { toast.error('Product name is required'); return; }
     if (!form.basePrice)    { toast.error('Base price is required');   return; }
@@ -273,33 +274,27 @@ export default function ProductEditor({ productId, onBack, categories, brands })
       if (!savedProductId) throw new Error('Product saved but no ID returned from server');
 
       if (options.length > 0 && variants.length > 0) {
-        const errors = [];
-        for (const v of variants) {
-          const variantImages = v.imageUrl
+        // All variants in ONE request — validated together, saved together.
+        const payload = variants.map(v => ({
+          id:             v.id || null,
+          productId:      savedProductId,
+          sku:            v.sku.trim(),
+          price:          parseFloat(v.price) || 0,
+          compareAtPrice: v.compareAtPrice ? parseFloat(v.compareAtPrice) || null : null,
+          stockQuantity:  parseInt(v.stockQuantity) || 0,
+          attributes:     v.attributes,
+          isActive:       v.isActive,
+          images:         v.imageUrl
             ? [{ url: v.imageUrl, isPrimary: true, type: 'IMAGE', altText: v.sku }]
-            : images;
-          try {
-            await api.post('/products/variants', {
-              id:             v.id || null,
-              productId:      savedProductId,
-              sku:            v.sku.trim(),
-              price:          parseFloat(v.price) || 0,
-              compareAtPrice: v.compareAtPrice ? parseFloat(v.compareAtPrice) || null : null,
-              stockQuantity:  parseInt(v.stockQuantity) || 0,
-              attributes:     v.attributes,
-              isActive:       v.isActive,
-              images:         variantImages,
-            });
-          } catch (err) {
-            const label = Object.values(v.attributes).join('/') || v.sku;
-            errors.push(`[${label}]: ${getErr(err)}`);
-          }
-        }
-        if (errors.length > 0) {
-          toast.error(`Product saved but ${errors.length} variant(s) had errors`, { duration: 6000 });
-          errors.forEach(e => toast.error(e, { duration: 6000 }));
-        } else {
+            : images,
+        }));
+        try {
+          await api.post(`/products/${savedProductId}/variants/bulk`, payload);
           toast.success(`Product saved with ${variants.length} variants!`);
+        } catch (err) {
+          toast.error(`Product details saved, but variants were not: ${getErr(err)}`, { duration: 7000 });
+          setSaving(false);
+          return; // stay in the editor so the problem can be fixed
         }
       } else {
         const autoSku = directInventory.sku.trim()
