@@ -3,7 +3,6 @@ import api from "../api/axiosConfig";
 
 const useProducts = (page = 0, size = 20) => {
   const [products, setProducts] = useState([]);
-  // Capture Spring Boot's pagination metadata
   const [pageInfo, setPageInfo] = useState({
     number: 0,
     totalPages: 1,
@@ -16,21 +15,20 @@ const useProducts = (page = 0, size = 20) => {
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
-    setError(null); // clear any previous failure so a successful retry actually shows products
+    setError(null);
     try {
-      // Pass the pagination parameters to your Spring Boot backend
       const res = await api.get(`/products?page=${page}&size=${size}`);
       if (res.data && res.data.content) {
+        const meta = res.data.page || res.data; // supports both new nested and old flat shape
         setProducts(res.data.content);
         setPageInfo({
-          number: res.data.number,
-          totalPages: res.data.totalPages,
-          totalElements: res.data.totalElements,
-          first: res.data.first,
-          last: res.data.last
+          number: meta.number,
+          totalPages: meta.totalPages,
+          totalElements: meta.totalElements,
+          first: meta.number === 0,
+          last: meta.number >= meta.totalPages - 1
         });
       } else {
-        // Fallback just in case an endpoint returns a flat array
         setProducts(res.data || []);
       }
     } catch (err) {
@@ -45,7 +43,6 @@ const useProducts = (page = 0, size = 20) => {
     fetchProducts();
   }, [fetchProducts]);
 
-  // While in an error state, retry automatically once the browser is back online
   useEffect(() => {
     if (!error) return;
     const retry = () => fetchProducts();
